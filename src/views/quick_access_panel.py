@@ -29,6 +29,12 @@ class QuickAccessPanel(QWidget):
     browser_clicked = pyqtSignal()
     category_filter_clicked = pyqtSignal()
     table_creator_clicked = pyqtSignal()
+    create_process_clicked = pyqtSignal()
+    view_processes_clicked = pyqtSignal()
+    ai_bulk_clicked = pyqtSignal()
+    ai_table_clicked = pyqtSignal()
+    pinned_panels_clicked = pyqtSignal()
+    advanced_search_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -44,8 +50,8 @@ class QuickAccessPanel(QWidget):
             Qt.WindowType.FramelessWindowHint
         )
 
-        # Fixed size for small panel
-        self.setFixedSize(220, 280)
+        # Fixed size for panel (increased for more buttons)
+        self.setFixedSize(220, 450)
 
         # Window opacity
         self.setWindowOpacity(0.95)
@@ -88,13 +94,19 @@ class QuickAccessPanel(QWidget):
 
         # Create buttons
         buttons_config = [
-            ("📊", "Crear Tabla", self.on_table_creator_clicked, 0, 0),
-            ("📋", "Tablas", self.on_tables_manager_clicked, 0, 1),
-            ("⭐", "Favoritos", self.on_favorites_clicked, 1, 0),
-            ("📊", "Estadísticas", self.on_stats_clicked, 1, 1),
-            ("🌐", "Navegador", self.on_browser_clicked, 2, 0),
-            ("📂", "Filtros", self.on_category_filter_clicked, 2, 1),
-            ("📈", "Dashboard", self.on_dashboard_clicked, 3, 0),
+            ("🔍⚡", "Búsqueda Avanzada", self.on_advanced_search_clicked, 0, 0),
+            ("🤖", "IA Bulk", self.on_ai_bulk_clicked, 0, 1),
+            ("🤖📊", "IA Tabla", self.on_ai_table_clicked, 1, 0),
+            ("⚙️➕", "Crear Proceso", self.on_create_process_clicked, 1, 1),
+            ("⚙️📋", "Ver Procesos", self.on_view_processes_clicked, 2, 0),
+            ("📊", "Crear Tabla", self.on_table_creator_clicked, 2, 1),
+            ("📋", "Tablas", self.on_tables_manager_clicked, 3, 0),
+            ("⭐", "Favoritos", self.on_favorites_clicked, 3, 1),
+            ("📊", "Estadísticas", self.on_stats_clicked, 4, 0),
+            ("🌐", "Navegador", self.on_browser_clicked, 4, 1),
+            ("📂", "Filtros", self.on_category_filter_clicked, 5, 0),
+            ("🗂️", "Dashboard", self.on_dashboard_clicked, 5, 1),
+            ("📌", "Paneles", self.on_pinned_panels_clicked, 6, 0),
         ]
 
         for icon, tooltip, handler, row, col in buttons_config:
@@ -189,6 +201,36 @@ class QuickAccessPanel(QWidget):
         self.dashboard_clicked.emit()
         self.hide()
 
+    def on_create_process_clicked(self):
+        """Handle create process button click"""
+        self.create_process_clicked.emit()
+        self.hide()
+
+    def on_view_processes_clicked(self):
+        """Handle view processes button click"""
+        self.view_processes_clicked.emit()
+        self.hide()
+
+    def on_ai_bulk_clicked(self):
+        """Handle AI bulk creation button click"""
+        self.ai_bulk_clicked.emit()
+        self.hide()
+
+    def on_ai_table_clicked(self):
+        """Handle AI table creation button click"""
+        self.ai_table_clicked.emit()
+        self.hide()
+
+    def on_pinned_panels_clicked(self):
+        """Handle pinned panels manager button click"""
+        self.pinned_panels_clicked.emit()
+        self.hide()
+
+    def on_advanced_search_clicked(self):
+        """Handle advanced search button click"""
+        self.advanced_search_clicked.emit()
+        self.hide()
+
     def position_near_button(self, button_widget):
         """Position panel near the quick access button"""
         if not button_widget:
@@ -199,6 +241,16 @@ class QuickAccessPanel(QWidget):
 
         # Position to the left of the button
         panel_x = button_pos.x() - self.width() - 10
-        panel_y = button_pos.y()
+
+        # Position panel higher up (align with top of screen with margin)
+        from PyQt6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geom = screen.availableGeometry()
+            # Position at top with small margin
+            panel_y = screen_geom.top() + 50
+        else:
+            # Fallback: align with button but offset upwards
+            panel_y = max(50, button_pos.y() - 200)
 
         self.move(panel_x, panel_y)

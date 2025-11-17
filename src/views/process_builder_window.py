@@ -95,27 +95,32 @@ class ProcessBuilderWindow(QWidget):
         info_layout = self.create_process_info_section()
         main_layout.addLayout(info_layout)
 
-        # === 3-PANEL LAYOUT ===
+        # === 4-PANEL LAYOUT ===
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Panel 1: Filters (25%)
+        # Panel 1: Filters (20%)
         filter_panel = self.create_filter_panel()
         splitter.addWidget(filter_panel)
 
-        # Panel 2: Available Items (35%)
+        # Panel 2: Available Items (30%)
         items_panel = self.create_items_panel()
         splitter.addWidget(items_panel)
 
-        # Panel 3: Process Constructor (40%)
+        # Panel 3: Process Constructor (30%)
         constructor_panel = self.create_constructor_panel()
         splitter.addWidget(constructor_panel)
+
+        # Panel 4: Saved Processes List (20%)
+        processes_list_panel = self.create_processes_list_panel()
+        splitter.addWidget(processes_list_panel)
 
         # Set initial sizes
         total_width = self.width()
         splitter.setSizes([
-            int(total_width * 0.25),
-            int(total_width * 0.35),
-            int(total_width * 0.40)
+            int(total_width * 0.20),
+            int(total_width * 0.30),
+            int(total_width * 0.30),
+            int(total_width * 0.20)
         ])
 
         main_layout.addWidget(splitter, stretch=1)
@@ -417,6 +422,81 @@ class ProcessBuilderWindow(QWidget):
 
         return panel
 
+    def create_processes_list_panel(self) -> QWidget:
+        """Create saved processes list panel (fourth column)"""
+        panel = QFrame()
+        panel.setFrameShape(QFrame.Shape.StyledPanel)
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: #252525;
+                border: 1px solid #3d3d3d;
+                border-radius: 6px;
+            }
+        """)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Title
+        title_layout = QHBoxLayout()
+        title = QLabel("Procesos Guardados")
+        title.setStyleSheet("font-size: 12pt; font-weight: bold; color: #ff6b00;")
+        title_layout.addWidget(title)
+
+        self.processes_count_label = QLabel("(0)")
+        self.processes_count_label.setStyleSheet("color: #888888;")
+        title_layout.addWidget(self.processes_count_label)
+        title_layout.addStretch()
+
+        layout.addLayout(title_layout)
+
+        # Info label
+        info_label = QLabel("Click en checkbox para activar/desactivar")
+        info_label.setStyleSheet("""
+            QLabel {
+                color: #888888;
+                font-size: 9pt;
+                font-style: italic;
+                padding: 5px;
+            }
+        """)
+        layout.addWidget(info_label)
+
+        # Scroll area for processes
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                background-color: #2d2d2d;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #555555;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #ff6b00;
+            }
+        """)
+
+        # Container for process items
+        self.processes_list_container = QWidget()
+        self.processes_list_layout = QVBoxLayout(self.processes_list_container)
+        self.processes_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.processes_list_layout.setSpacing(5)
+        self.processes_list_layout.addStretch()
+
+        scroll.setWidget(self.processes_list_container)
+        layout.addWidget(scroll)
+
+        return panel
+
     def create_footer(self) -> QHBoxLayout:
         """Create footer with action buttons"""
         layout = QHBoxLayout()
@@ -469,6 +549,9 @@ class ProcessBuilderWindow(QWidget):
 
         # Load all items
         self.load_all_items()
+
+        # Load saved processes list
+        self.load_saved_processes()
 
         # If editing, load process data
         if self.editing_mode and self.process_id:
@@ -529,6 +612,150 @@ class ProcessBuilderWindow(QWidget):
         except Exception as e:
             logger.error(f"Error loading process for editing: {e}", exc_info=True)
             QMessageBox.critical(self, "Error", f"Error al cargar proceso: {str(e)}")
+
+    def load_saved_processes(self):
+        """Load all saved processes into the fourth column"""
+        if not self.process_controller:
+            logger.warning("No process_controller available")
+            return
+
+        try:
+            # Get ALL processes (including inactive and archived)
+            processes = self.process_controller.process_manager.get_all_processes(
+                include_archived=True,
+                include_inactive=True
+            )
+
+            # Clear existing widgets
+            while self.processes_list_layout.count() > 1:  # Keep stretch
+                item = self.processes_list_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            # Add process items
+            for process in processes:
+                process_item = self.create_process_list_item(process)
+                self.processes_list_layout.insertWidget(
+                    self.processes_list_layout.count() - 1,  # Before stretch
+                    process_item
+                )
+
+            # Update count
+            self.processes_count_label.setText(f"({len(processes)})")
+
+            logger.info(f"Loaded {len(processes)} saved processes")
+
+        except Exception as e:
+            logger.error(f"Error loading saved processes: {e}")
+
+    def create_process_list_item(self, process) -> QWidget:
+        """Create a widget for a single process in the list"""
+        from PyQt6.QtWidgets import QCheckBox
+
+        container = QWidget()
+        container_layout = QHBoxLayout(container)
+        container_layout.setContentsMargins(5, 5, 5, 5)
+        container_layout.setSpacing(8)
+
+        # Checkbox for active/inactive
+        checkbox = QCheckBox("✓" if process.is_active else "")
+        checkbox.setChecked(process.is_active)
+        checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        checkbox.setStyleSheet("""
+            QCheckBox {
+                spacing: 3px;
+                color: #000000;
+                font-size: 14pt;
+                font-weight: bold;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+                border: 2px solid #555555;
+                border-radius: 4px;
+                background-color: #2d2d2d;
+            }
+            QCheckBox::indicator:hover {
+                border-color: #00ff88;
+                background-color: #353535;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #00ff88;
+                border-color: #00ff88;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #00dd77;
+                border-color: #00dd77;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: #3d3d3d;
+                border-color: #666666;
+            }
+        """)
+
+        # Update checkbox text on state change
+        def update_checkbox_text(state):
+            if state == 2:  # Checked
+                checkbox.setText("✓")
+            else:  # Unchecked
+                checkbox.setText("")
+            self.on_process_toggle(process.id, state)
+
+        checkbox.stateChanged.connect(update_checkbox_text)
+        container_layout.addWidget(checkbox)
+
+        # Process name label
+        name_label = QLabel(process.name)
+        name_label.setStyleSheet("""
+            QLabel {
+                color: #ffffff;
+                font-size: 10pt;
+            }
+        """)
+        name_label.setWordWrap(True)
+        container_layout.addWidget(name_label, stretch=1)
+
+        # Styling
+        container.setStyleSheet("""
+            QWidget {
+                background-color: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+            }
+            QWidget:hover {
+                background-color: #353535;
+                border-color: #ff6b00;
+            }
+        """)
+
+        return container
+
+    def on_process_toggle(self, process_id: int, state: int):
+        """Handle process active/inactive toggle"""
+        is_active = (state == 2)  # Qt.CheckState.Checked = 2
+
+        try:
+            # Get process
+            process = self.process_controller.get_process(process_id)
+            if not process:
+                logger.error(f"Process {process_id} not found")
+                return
+
+            # Update is_active
+            process.is_active = is_active
+
+            # Save to database
+            success, msg = self.process_controller.save_process(process)
+
+            if success:
+                logger.info(f"Process {process_id} {'activated' if is_active else 'deactivated'}")
+            else:
+                logger.error(f"Failed to toggle process: {msg}")
+                QMessageBox.warning(self, "Error", f"No se pudo actualizar el proceso: {msg}")
+
+        except Exception as e:
+            logger.error(f"Error toggling process: {e}")
+            QMessageBox.critical(self, "Error", f"Error al actualizar proceso: {str(e)}")
 
     # ==================== ITEM DISPLAY ====================
 

@@ -206,35 +206,9 @@ class Sidebar(QWidget):
         self.global_search_button.clicked.connect(self.on_global_search_clicked)
         main_layout.addWidget(self.global_search_button)
 
-        # Advanced Search button
-        self.advanced_search_button = QPushButton("🔍⚡")
-        self.advanced_search_button.setFixedSize(70, 40)
-        self.advanced_search_button.setToolTip("Búsqueda Avanzada (Ctrl+Shift+F)")
-        self.advanced_search_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.advanced_search_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_primary')};
-                border: none;
-                border-bottom: 2px solid {self.theme.get_color('background_deep')};
-                font-size: 14pt;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('primary')},
-                    stop:1 {self.theme.get_color('secondary')}
-                );
-                border-bottom: 2px solid {self.theme.get_color('accent')};
-            }}
-            QPushButton:pressed {{
-                background-color: {self.theme.get_color('surface')};
-                transform: scale(0.95);
-            }}
-        """)
-        self.advanced_search_button.clicked.connect(self.on_advanced_search_clicked)
-        main_layout.addWidget(self.advanced_search_button)
+        # MOVED TO QUICK ACCESS PANEL: Advanced Search button
+        # self.advanced_search_button = QPushButton("🔍⚡")
+        # ... (moved to QuickAccessPanel)
 
         # Notebook button
         self.notebook_button = QPushButton("📓")
@@ -266,65 +240,13 @@ class Sidebar(QWidget):
         self.notebook_button.clicked.connect(self.on_notebook_clicked)
         main_layout.addWidget(self.notebook_button)
 
-        # Create Process button
-        self.create_process_button = QPushButton("⚙️➕")
-        self.create_process_button.setFixedSize(70, 40)
-        self.create_process_button.setToolTip("Crear Proceso")
-        self.create_process_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.create_process_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_primary')};
-                border: none;
-                border-bottom: 2px solid {self.theme.get_color('background_deep')};
-                font-size: 14pt;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #ff6b00,
-                    stop:1 #00ff88
-                );
-                border-bottom: 2px solid #ff6b00;
-            }}
-            QPushButton:pressed {{
-                background-color: {self.theme.get_color('surface')};
-                transform: scale(0.95);
-            }}
-        """)
-        self.create_process_button.clicked.connect(self.on_create_process_clicked)
-        main_layout.addWidget(self.create_process_button)
+        # MOVED TO QUICK ACCESS PANEL: Create Process button
+        # self.create_process_button = QPushButton("⚙️➕")
+        # ... (moved to QuickAccessPanel)
 
-        # View Processes button
-        self.view_processes_button = QPushButton("⚙️📋")
-        self.view_processes_button.setFixedSize(70, 40)
-        self.view_processes_button.setToolTip("Ver Procesos Guardados")
-        self.view_processes_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.view_processes_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_primary')};
-                border: none;
-                border-bottom: 2px solid {self.theme.get_color('background_deep')};
-                font-size: 14pt;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #ff6b00,
-                    stop:1 #ff8c00
-                );
-                border-bottom: 2px solid #ff6b00;
-            }}
-            QPushButton:pressed {{
-                background-color: {self.theme.get_color('surface')};
-                transform: scale(0.95);
-            }}
-        """)
-        self.view_processes_button.clicked.connect(self.on_view_processes_clicked)
-        main_layout.addWidget(self.view_processes_button)
+        # MOVED TO QUICK ACCESS PANEL: View Processes button
+        # self.view_processes_button = QPushButton("⚙️📋")
+        # ... (moved to QuickAccessPanel)
 
         # MOVED TO QUICK ACCESS PANEL: Category Filter button (FC)
         # self.category_filter_button = QPushButton("📂")
@@ -459,104 +381,21 @@ class Sidebar(QWidget):
         # self.stats_button = QPushButton("📊")
         # ... (moved to QuickAccessPanel)
 
-        # AI Bulk Creation button
-        self.ai_bulk_button = QPushButton("🤖")
-        self.ai_bulk_button.setFixedSize(70, 45)
-        self.ai_bulk_button.setToolTip("Creación Masiva con IA")
-        self.ai_bulk_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.ai_bulk_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_secondary')};
-                border: none;
-                border-top: 2px solid {self.theme.get_color('surface')};
-                font-size: 16pt;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('primary')},
-                    stop:1 {self.theme.get_color('accent')}
-                );
-                color: {self.theme.get_color('text_primary')};
-            }}
-            QPushButton:pressed {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('accent')},
-                    stop:1 {self.theme.get_color('primary')}
-                );
-                color: {self.theme.get_color('background_deep')};
-            }}
-        """)
-        self.ai_bulk_button.clicked.connect(self.on_ai_bulk_clicked)
-        main_layout.addWidget(self.ai_bulk_button)
+        # MOVED TO QUICK ACCESS PANEL: AI Bulk Creation button
+        # self.ai_bulk_button = QPushButton("🤖")
+        # ... (moved to QuickAccessPanel)
 
-        # AI Table Creation button
-        self.ai_table_button = QPushButton("🤖📊")
-        self.ai_table_button.setFixedSize(70, 45)
-        self.ai_table_button.setToolTip("Crear Tabla con IA")
-        self.ai_table_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.ai_table_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_secondary')};
-                border: none;
-                border-top: 2px solid {self.theme.get_color('surface')};
-                font-size: 14pt;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('primary')},
-                    stop:1 {self.theme.get_color('accent')}
-                );
-                color: {self.theme.get_color('text_primary')};
-            }}
-            QPushButton:pressed {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('accent')},
-                    stop:1 {self.theme.get_color('primary')}
-                );
-                color: {self.theme.get_color('background_deep')};
-            }}
-        """)
-        self.ai_table_button.clicked.connect(self.on_ai_table_clicked)
-        main_layout.addWidget(self.ai_table_button)
+        # MOVED TO QUICK ACCESS PANEL: AI Table Creation button
+        # self.ai_table_button = QPushButton("🤖📊")
+        # ... (moved to QuickAccessPanel)
 
         # MOVED TO QUICK ACCESS PANEL: Browser button
         # self.browser_button = QPushButton("🌐")
         # ... (moved to QuickAccessPanel)
 
-        # MOVED TO QUICK ACCESS PANEL: Dashboard button (moved as well)
-        self.dashboard_button = QPushButton("🗂️")
-        self.dashboard_button.setFixedSize(70, 45)
-        self.dashboard_button.setToolTip("Dashboard de Estructura")
-        self.dashboard_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.dashboard_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: {self.theme.get_color('text_secondary')};
-                border: none;
-                border-top: 2px solid {self.theme.get_color('surface')};
-                font-size: 16pt;
-            }}
-            QPushButton:hover {{
-                background-color: {self.theme.get_color('surface')};
-                color: {self.theme.get_color('primary')};
-            }}
-            QPushButton:pressed {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {self.theme.get_color('primary')},
-                    stop:1 {self.theme.get_color('secondary')}
-                );
-                color: {self.theme.get_color('text_primary')};
-            }}
-        """)
-        self.dashboard_button.clicked.connect(self.on_dashboard_clicked)
-        main_layout.addWidget(self.dashboard_button)
+        # MOVED TO QUICK ACCESS PANEL: Dashboard button
+        # self.dashboard_button = QPushButton("🗂️")
+        # ... (moved to QuickAccessPanel)
 
         # Pinned Panels Manager button
         self.pinned_panels_button = QPushButton("📌")
@@ -588,8 +427,9 @@ class Sidebar(QWidget):
                 color: {self.theme.get_color('background_deep')};
             }}
         """)
-        self.pinned_panels_button.clicked.connect(self.on_pinned_panels_manager_clicked)
-        main_layout.addWidget(self.pinned_panels_button)
+        # MOVED TO QUICK ACCESS PANEL
+        # self.pinned_panels_button.clicked.connect(self.on_pinned_panels_manager_clicked)
+        # main_layout.addWidget(self.pinned_panels_button)
 
         # Settings button at the bottom
         self.settings_button = QPushButton("⚙")
@@ -800,6 +640,7 @@ class Sidebar(QWidget):
 
             # Connect signals if controller is available
             if self.controller:
+                self.quick_access_panel.advanced_search_clicked.connect(lambda: self.advanced_search_clicked.emit())
                 self.quick_access_panel.stats_clicked.connect(lambda: self.stats_clicked.emit())
                 self.quick_access_panel.tables_manager_clicked.connect(lambda: self.tables_manager_clicked.emit())
                 self.quick_access_panel.favorites_clicked.connect(lambda: self.favorites_clicked.emit())
@@ -807,6 +648,11 @@ class Sidebar(QWidget):
                 self.quick_access_panel.browser_clicked.connect(lambda: self.browser_clicked.emit())
                 self.quick_access_panel.category_filter_clicked.connect(lambda: self.category_filter_clicked.emit())
                 self.quick_access_panel.table_creator_clicked.connect(lambda: self.table_creator_clicked.emit())
+                self.quick_access_panel.create_process_clicked.connect(lambda: self.create_process_clicked.emit())
+                self.quick_access_panel.view_processes_clicked.connect(lambda: self.view_processes_clicked.emit())
+                self.quick_access_panel.ai_bulk_clicked.connect(lambda: self.ai_bulk_clicked.emit())
+                self.quick_access_panel.ai_table_clicked.connect(lambda: self.ai_table_clicked.emit())
+                self.quick_access_panel.pinned_panels_clicked.connect(lambda: self.pinned_panels_manager_clicked.emit())
 
         # Toggle visibility
         if self.quick_access_panel.isVisible():
