@@ -72,6 +72,10 @@ class ProcessBuilderWindow(QWidget):
         # Step widgets in constructor
         self.step_widgets = []
 
+        # Edit mode state
+        self.edit_mode_active = False
+        self.process_being_edited = None  # ID of process being edited
+
         self.init_ui()
         self.load_data()
 
@@ -505,11 +509,42 @@ class ProcessBuilderWindow(QWidget):
         title_layout.addWidget(self.processes_count_label)
         title_layout.addStretch()
 
+        # Edit mode button
+        self.edit_mode_btn = QPushButton("✏️ Modo Edición")
+        self.edit_mode_btn.setFixedSize(120, 30)
+        self.edit_mode_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.edit_mode_btn.setCheckable(True)
+        self.edit_mode_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3d3d3d;
+                color: #ffffff;
+                border: 2px solid #555555;
+                border-radius: 4px;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #555555;
+                border-color: #ff6b00;
+            }
+            QPushButton:checked {
+                background-color: #ff6b00;
+                border-color: #ff6b00;
+                color: #000000;
+            }
+            QPushButton:checked:hover {
+                background-color: #ff8c00;
+                border-color: #ff8c00;
+            }
+        """)
+        self.edit_mode_btn.clicked.connect(self.on_edit_mode_toggled)
+        title_layout.addWidget(self.edit_mode_btn)
+
         layout.addLayout(title_layout)
 
         # Info label
-        info_label = QLabel("Click en checkbox para activar/desactivar")
-        info_label.setStyleSheet("""
+        self.processes_info_label = QLabel("Click en checkbox para activar/desactivar")
+        self.processes_info_label.setStyleSheet("""
             QLabel {
                 color: #888888;
                 font-size: 9pt;
@@ -517,7 +552,7 @@ class ProcessBuilderWindow(QWidget):
                 padding: 5px;
             }
         """)
-        layout.addWidget(info_label)
+        layout.addWidget(self.processes_info_label)
 
         # Scroll area for processes
         scroll = QScrollArea()
@@ -573,9 +608,9 @@ class ProcessBuilderWindow(QWidget):
         cancel_btn.clicked.connect(self.close)
         layout.addWidget(cancel_btn)
 
-        # Save button
-        save_btn = QPushButton("💾 Guardar Proceso")
-        save_btn.setStyleSheet("""
+        # Save/Update button
+        self.save_btn = QPushButton("💾 Guardar Proceso")
+        self.save_btn.setStyleSheet("""
             QPushButton {
                 background-color: #00ff88;
                 color: #000000;
@@ -586,8 +621,8 @@ class ProcessBuilderWindow(QWidget):
                 background-color: #00cc70;
             }
         """)
-        save_btn.clicked.connect(self.on_save_clicked)
-        layout.addWidget(save_btn)
+        self.save_btn.clicked.connect(self.on_save_clicked)
+        layout.addWidget(self.save_btn)
 
         return layout
 
@@ -731,6 +766,7 @@ class ProcessBuilderWindow(QWidget):
         from PyQt6.QtWidgets import QCheckBox
 
         container = QWidget()
+        container.setProperty("process_id", process.id)  # Store process ID
         container_layout = QHBoxLayout(container)
         container_layout.setContentsMargins(5, 5, 5, 5)
         container_layout.setSpacing(8)
@@ -805,6 +841,10 @@ class ProcessBuilderWindow(QWidget):
                 border-color: #ff6b00;
             }
         """)
+
+        # Make clickable in edit mode
+        container.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        container.mousePressEvent = lambda event: self.on_process_item_clicked(process.id)
 
         return container
 
@@ -1199,6 +1239,21 @@ class ProcessBuilderWindow(QWidget):
                     border: 2px solid #ffffff;
                 }}
             """)
+        else:
+            # Reset to default style
+            self.color_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #007acc;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #005a9e;
+                }
+            """)
 
     # ==================== SAVE ====================
 
@@ -1221,8 +1276,14 @@ class ProcessBuilderWindow(QWidget):
             return
 
         try:
-            if self.editing_mode:
-                # Update existing process
+            # Check if we're in edit mode
+            is_updating = self.process_being_edited is not None
+
+            if is_updating:
+                # Update existing process (from edit mode)
+                success, message = self.process_controller.save_process(process)
+            elif self.editing_mode:
+                # Update existing process (original editing mode)
                 success, message = self.process_controller.save_process(process)
             else:
                 # Create new process
@@ -1231,9 +1292,20 @@ class ProcessBuilderWindow(QWidget):
                     self.process_id = process_id
 
             if success:
-                QMessageBox.information(self, "Exito", message)
-                self.process_saved.emit(self.process_id)
-                self.close()
+                action = "actualizado" if (is_updating or self.editing_mode) else "creado"
+                QMessageBox.information(self, "Éxito", f"Proceso {action} exitosamente")
+
+                # Emit signal with correct process ID
+                emit_id = self.process_id if self.process_id else self.process_being_edited
+                self.process_saved.emit(emit_id)
+
+                # If in edit mode, clear it and reload process list
+                if is_updating:
+                    self.clear_edit_mode()
+                    self.edit_mode_btn.setChecked(False)
+                    self.load_saved_processes()
+                else:
+                    self.close()
             else:
                 QMessageBox.warning(self, "Error", message)
 
@@ -1260,9 +1332,16 @@ class ProcessBuilderWindow(QWidget):
     def build_process(self) -> Process:
         """Build Process object from form data"""
         try:
+            # Determine process ID
+            process_id = None
+            if self.process_being_edited:
+                process_id = self.process_being_edited
+            elif self.editing_mode:
+                process_id = self.process_id
+
             # Create Process
             process = Process(
-                id=self.process_id if self.editing_mode else None,
+                id=process_id,
                 name=self.name_input.text().strip(),
                 description=self.description_input.text().strip() or None,
                 icon=self.icon_input.text().strip() or "⚙️",
@@ -1433,4 +1512,183 @@ class ProcessBuilderWindow(QWidget):
         """Handle changes in component types"""
         # Reload component buttons
         self.load_available_components()
+
+    # ==================== EDIT MODE ====================
+
+    def on_edit_mode_toggled(self, checked: bool):
+        """Handle edit mode button toggle"""
+        self.edit_mode_active = checked
+
+        if checked:
+            # Entering edit mode
+            self.processes_info_label.setText("🔄 Haz click en un proceso para editarlo")
+            self.processes_info_label.setStyleSheet("""
+                QLabel {
+                    color: #ff6b00;
+                    font-size: 9pt;
+                    font-weight: bold;
+                    padding: 5px;
+                }
+            """)
+            logger.info("Edit mode activated")
+        else:
+            # Exiting edit mode
+            self.clear_edit_mode()
+            self.processes_info_label.setText("Click en checkbox para activar/desactivar")
+            self.processes_info_label.setStyleSheet("""
+                QLabel {
+                    color: #888888;
+                    font-size: 9pt;
+                    font-style: italic;
+                    padding: 5px;
+                }
+            """)
+            logger.info("Edit mode deactivated")
+
+    def on_process_item_clicked(self, process_id: int):
+        """Handle click on process item"""
+        # Only respond if edit mode is active
+        if not self.edit_mode_active:
+            return
+
+        logger.info(f"Process item clicked in edit mode: {process_id}")
+        self.load_process_for_edit_mode(process_id)
+
+    def load_process_for_edit_mode(self, process_id: int):
+        """Load a process into the constructor for editing"""
+        if not self.process_controller:
+            logger.error("No process_controller available")
+            return
+
+        try:
+            # Get process from process_manager
+            process_manager = self.process_controller.process_manager
+            process = process_manager.get_process(process_id)
+
+            if not process:
+                logger.error(f"Process {process_id} not found")
+                QMessageBox.warning(self, "Error", "Proceso no encontrado")
+                return
+
+            # Clear current constructor
+            self.clear_constructor()
+
+            # Set as being edited
+            self.process_being_edited = process_id
+
+            # Fill form fields
+            self.name_input.setText(process.name)
+            self.description_input.setText(process.description or "")
+            self.icon_input.setText(process.icon or "")
+            self.delay_spinbox.setValue(process.delay_between_steps)
+
+            if process.color:
+                self.selected_color = process.color
+                self.update_color_button()
+
+            # Load steps into constructor
+            for step in process.steps:
+                self.add_step_to_constructor(step)
+
+            # Update button text
+            self.save_btn.setText("🔄 Actualizar Proceso")
+            self.save_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ff6b00;
+                    color: #000000;
+                    font-size: 11pt;
+                    padding: 10px 20px;
+                }
+                QPushButton:hover {
+                    background-color: #ff8c00;
+                }
+            """)
+
+            # Highlight the selected process
+            self.highlight_selected_process(process_id)
+
+            logger.info(f"Loaded process '{process.name}' for editing with {len(process.steps)} steps")
+
+        except Exception as e:
+            logger.error(f"Error loading process for edit mode: {e}", exc_info=True)
+            QMessageBox.critical(self, "Error", f"Error al cargar proceso: {str(e)}")
+
+    def clear_edit_mode(self):
+        """Clear edit mode state"""
+        self.process_being_edited = None
+        self.clear_constructor()
+        self.clear_form()
+        self.remove_process_highlights()
+
+        # Reset button
+        self.save_btn.setText("💾 Guardar Proceso")
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00ff88;
+                color: #000000;
+                font-size: 11pt;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #00cc70;
+            }
+        """)
+
+    def clear_constructor(self):
+        """Clear all steps from constructor"""
+        # Remove all step widgets
+        while self.step_widgets:
+            widget = self.step_widgets.pop()
+            self.steps_layout.removeWidget(widget)
+            widget.deleteLater()
+
+        self.update_step_widgets()
+        logger.debug("Constructor cleared")
+
+    def clear_form(self):
+        """Clear form fields"""
+        self.name_input.clear()
+        self.description_input.clear()
+        self.icon_input.clear()
+        self.delay_spinbox.setValue(500)
+        self.selected_color = None
+        self.update_color_button()
+
+    def highlight_selected_process(self, process_id: int):
+        """Highlight the selected process in the list"""
+        # Remove previous highlights
+        self.remove_process_highlights()
+
+        # Find and highlight the selected process
+        for i in range(self.processes_list_layout.count() - 1):  # -1 for stretch
+            item = self.processes_list_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if widget.property("process_id") == process_id:
+                    widget.setStyleSheet("""
+                        QWidget {
+                            background-color: #ff6b00;
+                            border: 2px solid #ff8c00;
+                            border-radius: 4px;
+                        }
+                    """)
+                    break
+
+    def remove_process_highlights(self):
+        """Remove highlights from all processes"""
+        for i in range(self.processes_list_layout.count() - 1):  # -1 for stretch
+            item = self.processes_list_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                widget.setStyleSheet("""
+                    QWidget {
+                        background-color: #2d2d2d;
+                        border: 1px solid #3d3d3d;
+                        border-radius: 4px;
+                    }
+                    QWidget:hover {
+                        background-color: #353535;
+                        border-color: #ff6b00;
+                    }
+                """)
 

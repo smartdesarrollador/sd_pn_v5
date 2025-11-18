@@ -194,7 +194,26 @@ class ProcessManager:
                 category=process.category
             )
 
-            logger.info(f"Process {process.id} updated: {process.name}")
+            # Update steps: delete all existing and recreate
+            # First, delete all existing steps for this process
+            self.db.delete_process_steps(process.id)
+
+            # Then add the new steps
+            if process.steps:
+                for step in process.steps:
+                    self.db.add_process_step(
+                        process_id=process.id,
+                        item_id=step.item_id,
+                        step_order=step.step_order,
+                        custom_label=step.custom_label,
+                        is_optional=step.is_optional,
+                        is_enabled=step.is_enabled,
+                        wait_for_confirmation=step.wait_for_confirmation,
+                        notes=step.notes,
+                        group_name=step.group_name
+                    )
+
+            logger.info(f"Process {process.id} updated: {process.name} with {len(process.steps)} steps")
             return True, "Process updated successfully"
 
         except Exception as e:

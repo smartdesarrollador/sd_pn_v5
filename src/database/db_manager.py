@@ -3489,6 +3489,23 @@ class DBManager:
         logger.info(f"Process step {step_id} deleted")
         return True
 
+    def delete_process_steps(self, process_id: int) -> bool:
+        """
+        Delete all steps for a process
+
+        Args:
+            process_id: Process ID
+
+        Returns:
+            bool: Success status
+        """
+        with self.transaction() as conn:
+            cursor = conn.execute("DELETE FROM process_items WHERE process_id = ?", (process_id,))
+            deleted_count = cursor.rowcount
+
+        logger.info(f"Deleted {deleted_count} steps for process {process_id}")
+        return True
+
     def reorder_process_steps(self, process_id: int, step_ids_in_order: List[int]) -> bool:
         """
         Reorder steps of a process
