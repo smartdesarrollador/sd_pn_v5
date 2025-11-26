@@ -317,36 +317,6 @@ class Sidebar(QWidget):
         self.quick_create_button.clicked.connect(self.on_quick_create_clicked)
         main_layout.addWidget(self.quick_create_button)
 
-        # Web Static Create button (📱)
-        self.web_static_button = QPushButton("📱")
-        self.web_static_button.setFixedSize(70, 40)
-        self.web_static_button.setToolTip("Crear Item Web Estático")
-        self.web_static_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.web_static_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme.get_color('background_deep')};
-                color: #4CAF50;
-                border: none;
-                border-top: 2px solid {self.theme.get_color('surface')};
-                font-size: 18pt;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #4CAF50,
-                    stop:1 #00d4ff
-                );
-                color: #000000;
-            }}
-            QPushButton:pressed {{
-                background-color: {self.theme.get_color('surface')};
-                color: #4CAF50;
-            }}
-        """)
-        self.web_static_button.clicked.connect(self.on_web_static_create_clicked)
-        main_layout.addWidget(self.web_static_button)
-
         # Quick Access button (⚡)
         self.quick_access_button = QPushButton("⚡")
         self.quick_access_button.setFixedSize(70, 40)
@@ -783,10 +753,6 @@ class Sidebar(QWidget):
         """Handle quick create button click"""
         self.quick_create_clicked.emit()
 
-    def on_web_static_create_clicked(self):
-        """Handle web static create button click"""
-        self.web_static_create_clicked.emit()
-
     def on_quick_access_clicked(self):
         """Handle quick access button click - show/hide quick access panel"""
         if not hasattr(self, 'quick_access_panel') or self.quick_access_panel is None:
@@ -808,6 +774,7 @@ class Sidebar(QWidget):
                 self.quick_access_panel.ai_table_clicked.connect(lambda: self.ai_table_clicked.emit())
                 self.quick_access_panel.pinned_panels_clicked.connect(lambda: self.pinned_panels_manager_clicked.emit())
                 self.quick_access_panel.component_manager_clicked.connect(lambda: self.component_manager_clicked.emit())
+                self.quick_access_panel.web_static_create_clicked.connect(lambda: self.web_static_create_clicked.emit())
 
         # Toggle visibility
         if self.quick_access_panel.isVisible():
