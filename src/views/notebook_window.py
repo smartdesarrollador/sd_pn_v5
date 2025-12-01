@@ -7,7 +7,7 @@ import ctypes
 from ctypes import wintypes
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QPushButton, QLabel, QMessageBox, QApplication, QMenu
+    QPushButton, QLabel, QMessageBox, QApplication, QMenu, QWidgetAction
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint
 from PyQt6.QtGui import QIcon, QAction
@@ -395,14 +395,11 @@ class NotebookWindow(QWidget):
                 padding: 5px;
             }
             QMenu::item {
-                padding: 8px 30px;
+                padding: 0px;
                 border-radius: 4px;
             }
             QMenu::item:selected {
-                background-color: #0078D4;
-            }
-            QMenu::item:disabled {
-                color: #808080;
+                background-color: transparent;
             }
             QMenu::separator {
                 height: 1px;
@@ -414,28 +411,60 @@ class NotebookWindow(QWidget):
         # Obtener índice de pestaña activa
         current_index = self.tab_widget.currentIndex()
 
-        # Agregar cada pestaña al menú
+        # Agregar cada pestaña al menú con botón de cerrar
         for i in range(self.tab_widget.count()):
             tab_title = self.tab_widget.tabText(i)
 
-            # Crear acción con número de pestaña
-            action_text = f"{i + 1}. {tab_title}"
+            # Crear widget personalizado para el item del menú
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.setContentsMargins(8, 4, 8, 4)
+            layout.setSpacing(8)
 
-            # Marcar la pestaña activa
+            # Label con el nombre de la pestaña
+            action_text = f"{i + 1}. {tab_title}"
             if i == current_index:
                 action_text = f"✓ {action_text}"
 
-            action = QAction(action_text, self)
-            action.setData(i)  # Guardar índice en la acción
+            label = QLabel(action_text)
+            label.setStyleSheet(f"""
+                QLabel {{
+                    color: {'#808080' if i == current_index else '#FFFFFF'};
+                    padding: 4px;
+                    background-color: transparent;
+                }}
+            """)
+            layout.addWidget(label, 1)
 
-            # Conectar acción para cambiar a esa pestaña
-            action.triggered.connect(lambda checked, idx=i: self.switch_to_tab(idx))
+            # Botón de cerrar pequeño
+            close_btn = QPushButton("✕")
+            close_btn.setFixedSize(20, 20)
+            close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #808080;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #e74c3c;
+                    color: #FFFFFF;
+                }
+            """)
+            close_btn.clicked.connect(lambda checked, idx=i: self._close_tab_from_menu(menu, idx))
+            layout.addWidget(close_btn)
 
-            # Deshabilitar la acción de la pestaña activa (ya estamos en ella)
-            if i == current_index:
-                action.setEnabled(False)
+            # Crear QWidgetAction
+            widget_action = QWidgetAction(menu)
+            widget_action.setDefaultWidget(widget)
 
-            menu.addAction(action)
+            # Conectar click en el label para cambiar de pestaña
+            label.mousePressEvent = lambda event, idx=i: self._switch_and_close_menu(menu, idx)
+
+            menu.addAction(widget_action)
 
         # Agregar separador y opción para crear nueva pestaña
         menu.addSeparator()
@@ -448,6 +477,16 @@ class NotebookWindow(QWidget):
         menu.exec(button_pos)
 
         logger.debug(f"Tabs menu shown with {self.tab_widget.count()} tabs")
+
+    def _switch_and_close_menu(self, menu, index):
+        """Cambiar a una pestaña y cerrar el menú"""
+        menu.close()
+        self.switch_to_tab(index)
+
+    def _close_tab_from_menu(self, menu, index):
+        """Cerrar una pestaña desde el menú"""
+        menu.close()
+        self.close_tab(index)
 
     def switch_to_tab(self, index):
         """Cambiar a una pestaña específica"""

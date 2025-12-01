@@ -83,7 +83,7 @@ class NotebookTab(QWidget):
         content_label.setStyleSheet("color: #B0B0B0; font-size: 11px; font-weight: bold;")
         self.content_input = QTextEdit()
         self.content_input.setPlaceholderText("Escribe tu contenido aqui...\n\nPuedes escribir:\n- Comandos de terminal\n- Codigo\n- URLs\n- Rutas de archivos\n- Notas de texto")
-        self.content_input.setMinimumHeight(280)
+        self.content_input.setMinimumHeight(450)
 
         # Font monospace para contenido
         font = QFont("Consolas", 10)
