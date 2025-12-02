@@ -389,6 +389,10 @@ class ProjectsWindow(QMainWindow):
         self.refresh_btn.setVisible(True)  # Mostrar botón refrescar
         self.edit_project_btn.setVisible(True)  # Mostrar botón editar
 
+        # Actualizar filtro de tags para mostrar solo tags de este proyecto
+        if hasattr(self, 'tag_filter_widget'):
+            self.tag_filter_widget.set_project(project_id)
+
         # Limpiar canvas y grid
         self._clear_canvas()
         self.clean_mode_grid.clear_cards()
@@ -479,6 +483,15 @@ class ProjectsWindow(QMainWindow):
 
             # Agregar descripción de la relación a la metadata
             metadata['description'] = item.get('description', '')
+
+            # Obtener y agregar tags de la relación
+            relation_id = item.get('id')
+            if relation_id:
+                tags_data = self.db.get_tags_for_project_relation(relation_id)
+                # Convertir a objetos ProjectElementTag
+                from src.models.project_element_tag import create_tag_from_db_row
+                tags = [create_tag_from_db_row(tag_data) for tag_data in tags_data]
+                metadata['tags'] = tags
 
             # Crear card
             card = ProjectCardWidget(
@@ -993,6 +1006,11 @@ class ProjectsWindow(QMainWindow):
                     self.refresh_btn.setVisible(False)
                     self.edit_project_btn.setVisible(False)
                     self._clear_canvas()
+
+                    # Limpiar filtro de tags
+                    if hasattr(self, 'tag_filter_widget'):
+                        self.tag_filter_widget.set_project(None)
+
                     self.load_projects()
 
         except Exception as e:

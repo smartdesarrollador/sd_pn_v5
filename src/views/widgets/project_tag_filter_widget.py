@@ -27,16 +27,18 @@ class ProjectTagFilterWidget(QWidget):
     # Señales
     filter_changed = pyqtSignal(list, bool)  # tag_ids, match_all
 
-    def __init__(self, tag_manager: ProjectElementTagManager, parent=None):
+    def __init__(self, tag_manager: ProjectElementTagManager, project_id: int = None, parent=None):
         """
         Inicializa el widget
 
         Args:
             tag_manager: Manager de tags
+            project_id: ID del proyecto (None = mostrar todos los tags)
             parent: Widget padre
         """
         super().__init__(parent)
         self.tag_manager = tag_manager
+        self.project_id = project_id
         self.tag_checkboxes = {}  # {tag_id: QCheckBox}
         self.match_all = False  # False = OR logic, True = AND logic
         self._setup_ui()
@@ -191,9 +193,14 @@ class ProjectTagFilterWidget(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Obtener tags
-        tags = self.tag_manager.get_all_tags(refresh=True)
-        tags_sorted = self.tag_manager.get_tags_sorted()
+        # Obtener tags según el proyecto
+        if self.project_id is not None:
+            # Solo tags del proyecto específico
+            tags_sorted = self.tag_manager.get_tags_for_project(self.project_id)
+        else:
+            # Todos los tags
+            tags = self.tag_manager.get_all_tags(refresh=True)
+            tags_sorted = self.tag_manager.get_tags_sorted()
 
         # Actualizar contador
         self.count_label.setText(f"({len(tags_sorted)} tags)")
@@ -277,4 +284,15 @@ class ProjectTagFilterWidget(QWidget):
 
     def refresh(self):
         """Refresca la lista de tags"""
+        self._load_tags()
+
+    def set_project(self, project_id: int = None):
+        """
+        Cambia el proyecto y recarga los tags
+
+        Args:
+            project_id: ID del proyecto a mostrar (None = limpiar filtro)
+        """
+        self.project_id = project_id
+        self.clear_filters()  # Limpiar selección
         self._load_tags()

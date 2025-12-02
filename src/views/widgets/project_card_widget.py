@@ -188,6 +188,10 @@ class ProjectCardWidget(QWidget):
         preview_label.setMinimumHeight(40)
         card_layout.addWidget(preview_label, 1)
 
+        # Tags (si existen)
+        if 'tags' in self.item_data and self.item_data['tags']:
+            self._add_tags_section(card_layout)
+
         # Footer: Metadata
         footer_layout = QHBoxLayout()
         footer_layout.setSpacing(8)
@@ -223,6 +227,59 @@ class ProjectCardWidget(QWidget):
         card_layout.addLayout(footer_layout)
 
         main_layout.addWidget(self.card_frame)
+
+    def _add_tags_section(self, layout):
+        """Agrega la sección de tags al layout"""
+        tags_layout = QHBoxLayout()
+        tags_layout.setSpacing(4)
+        tags_layout.setContentsMargins(0, 4, 0, 0)
+
+        # Obtener los tags
+        tags = self.item_data.get('tags', [])
+
+        # Mostrar máximo 3 tags
+        max_visible_tags = 3
+        visible_tags = tags[:max_visible_tags]
+
+        for tag in visible_tags:
+            # Crear chip simple sin dependencia de ProjectTagChip
+            chip = self._create_simple_tag_chip(tag)
+            tags_layout.addWidget(chip)
+
+        # Si hay más tags, mostrar indicador "+X más"
+        if len(tags) > max_visible_tags:
+            remaining = len(tags) - max_visible_tags
+            more_label = QLabel(f"+{remaining}")
+            more_label.setStyleSheet("""
+                QLabel {
+                    color: #888888;
+                    font-size: 7pt;
+                    font-style: italic;
+                    padding: 2px 6px;
+                }
+            """)
+            tags_layout.addWidget(more_label)
+
+        tags_layout.addStretch()
+        layout.addLayout(tags_layout)
+
+    def _create_simple_tag_chip(self, tag):
+        """Crea un chip simple para mostrar un tag"""
+        chip = QLabel(tag.name)
+        chip.setFixedHeight(18)
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chip.setStyleSheet(f"""
+            QLabel {{
+                background-color: {tag.color};
+                color: #000000;
+                font-size: 7pt;
+                font-weight: bold;
+                border-radius: 9px;
+                padding: 2px 8px;
+                border: 1px solid {tag.color};
+            }}
+        """)
+        return chip
 
     def setup_shadow_effect(self):
         """Configura el efecto de sombra"""

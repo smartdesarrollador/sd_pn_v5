@@ -509,6 +509,42 @@ class ProjectElementTagManager(QObject):
         tags = self.get_all_tags()
         return sort_tags_by_name(tags, reverse=reverse)
 
+    def get_tags_for_project(self, project_id: int) -> List[ProjectElementTag]:
+        """
+        Obtiene los tags únicos usados en un proyecto específico
+
+        Args:
+            project_id: ID del proyecto
+
+        Returns:
+            Lista de tags únicos usados en el proyecto, ordenados por nombre
+        """
+        try:
+            # Obtener todas las relaciones del proyecto
+            relations = self.db.get_project_relations(project_id)
+
+            # Recopilar IDs de tags únicos
+            tag_ids = set()
+            for relation in relations:
+                # Obtener tags de cada relación
+                tags_data = self.db.get_tags_for_project_relation(relation['id'])
+                for tag_data in tags_data:
+                    tag_ids.add(tag_data['id'])
+
+            # Obtener objetos Tag completos
+            tags = []
+            for tag_id in tag_ids:
+                tag = self.get_tag(tag_id)
+                if tag:
+                    tags.append(tag)
+
+            # Ordenar por nombre
+            return sort_tags_by_name(tags)
+
+        except Exception as e:
+            logger.error(f"Error obteniendo tags del proyecto {project_id}: {e}")
+            return []
+
     def filter_tags(self, query: str) -> List[ProjectElementTag]:
         """
         Filtra tags desde el caché (más rápido que búsqueda en BD)
