@@ -16,6 +16,74 @@ from PyQt6.QtGui import QFont
 from src.core.project_element_tag_manager import ProjectElementTagManager
 
 
+class TagCheckBox(QCheckBox):
+    """
+    Checkbox personalizado para tags con estilos dinámicos
+
+    Esta clase garantiza que los estilos se apliquen correctamente
+    cada vez que se crea o actualiza el checkbox.
+    """
+
+    def __init__(self, tag_name: str, tag_color: str, parent=None):
+        super().__init__(tag_name, parent)
+        self.tag_color = tag_color
+        self.setFont(QFont("Segoe UI", 9))
+        self._apply_styles()
+
+        # Conectar señal de cambio de estado para forzar actualización visual
+        self.stateChanged.connect(self._on_state_changed)
+
+    def _apply_styles(self):
+        """Aplica los estilos CSS al checkbox"""
+        # Estilos mejorados con indicadores visuales MUY claros
+        self.setStyleSheet(f"""
+            QCheckBox {{
+                color: #ecf0f1;
+                spacing: 8px;
+                padding: 8px 12px;
+                border-radius: 4px;
+                background-color: #2c3e50;
+                border: 1px solid transparent;
+                margin: 2px 0px;
+            }}
+            QCheckBox:checked {{
+                background-color: {self.tag_color}60;
+                border: 2px solid {self.tag_color};
+                font-weight: bold;
+                color: #ffffff;
+            }}
+            QCheckBox:hover {{
+                background-color: {self.tag_color}30;
+                border: 1px solid {self.tag_color}80;
+            }}
+            QCheckBox::indicator {{
+                width: 20px;
+                height: 20px;
+                border: 2px solid {self.tag_color}80;
+                border-radius: 4px;
+                background-color: #1a1a1a;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {self.tag_color};
+                border: 3px solid {self.tag_color};
+            }}
+            QCheckBox::indicator:unchecked {{
+                background-color: #34495e;
+                border: 2px solid {self.tag_color}40;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {self.tag_color};
+                border-width: 3px;
+            }}
+        """)
+
+    def _on_state_changed(self, state):
+        """Callback cuando cambia el estado - fuerza actualización visual"""
+        # Forzar repaint para asegurar que los estilos se apliquen
+        self.update()
+        self.repaint()
+
+
 class ProjectTagFilterWidget(QWidget):
     """
     Widget para filtrar elementos por tags - Estilo Dashboard
@@ -39,13 +107,13 @@ class ProjectTagFilterWidget(QWidget):
         super().__init__(parent)
         self.tag_manager = tag_manager
         self.project_id = project_id
-        self.tag_checkboxes = {}  # {tag_id: QCheckBox}
+        self.tag_checkboxes = {}  # {tag_id: TagCheckBox}
         self.match_all = False  # False = OR logic, True = AND logic
         self._setup_ui()
         self._load_tags()
 
         # Conectar señal de cache invalidado para refrescar
-        self.tag_manager.cache_invalidated.connect(self._load_tags)
+        self.tag_manager.cache_invalidated.connect(self._on_cache_invalidated)
 
     def _setup_ui(self):
         """Configura la UI del widget"""
@@ -109,7 +177,7 @@ class ProjectTagFilterWidget(QWidget):
         self.tags_container = QWidget()
         self.tags_layout = QVBoxLayout(self.tags_container)
         self.tags_layout.setContentsMargins(8, 8, 8, 8)
-        self.tags_layout.setSpacing(4)
+        self.tags_layout.setSpacing(6)
         self.tags_layout.addStretch()
 
         scroll.setWidget(self.tags_container)
@@ -122,6 +190,9 @@ class ProjectTagFilterWidget(QWidget):
             QCheckBox {
                 color: #ecf0f1;
                 spacing: 8px;
+                padding: 6px;
+                background-color: #2c3e50;
+                border-radius: 4px;
             }
             QCheckBox::indicator {
                 width: 16px;
@@ -182,6 +253,9 @@ class ProjectTagFilterWidget(QWidget):
 
     def _load_tags(self):
         """Carga los tags disponibles"""
+        # Guardar estado actual de checkboxes antes de limpiar
+        current_selected = self.get_selected_tag_ids()
+
         # Limpiar checkboxes existentes
         for checkbox in self.tag_checkboxes.values():
             checkbox.deleteLater()
@@ -205,50 +279,27 @@ class ProjectTagFilterWidget(QWidget):
         # Actualizar contador
         self.count_label.setText(f"({len(tags_sorted)} tags)")
 
-        # Crear checkboxes
+        # Crear checkboxes usando la clase personalizada
         for tag in tags_sorted:
-            checkbox = QCheckBox(tag.name)
-            checkbox.setFont(QFont("Segoe UI", 9))
-            # Estilo con color de fondo que cambia al seleccionar
-            checkbox.setStyleSheet(f"""
-                QCheckBox {{
-                    color: #ecf0f1;
-                    spacing: 8px;
-                    padding: 6px 10px;
-                    border-radius: 4px;
-                    background-color: transparent;
-                }}
-                QCheckBox:checked {{
-                    background-color: {tag.color}33;
-                    border: 1px solid {tag.color};
-                }}
-                QCheckBox:hover {{
-                    background-color: {tag.color}22;
-                }}
-                QCheckBox::indicator {{
-                    width: 18px;
-                    height: 18px;
-                    border: 2px solid {tag.color};
-                    border-radius: 4px;
-                    background-color: transparent;
-                }}
-                QCheckBox::indicator:checked {{
-                    background-color: {tag.color};
-                    border: 2px solid {tag.color};
-                }}
-                QCheckBox::indicator:unchecked {{
-                    background-color: #2c3e50;
-                    border: 2px solid {tag.color};
-                }}
-                QCheckBox::indicator:hover {{
-                    border-width: 3px;
-                }}
-            """)
+            # Usar TagCheckBox personalizado que garantiza estilos correctos
+            checkbox = TagCheckBox(tag.name, tag.color, parent=self.tags_container)
+
+            # Restaurar estado si estaba seleccionado antes
+            if tag.id in current_selected:
+                checkbox.setChecked(True)
+
+            # Conectar señal
             checkbox.stateChanged.connect(self._on_filter_changed)
 
+            # Guardar referencia
             self.tag_checkboxes[tag.id] = checkbox
+
             # Insertar antes del stretch
             self.tags_layout.insertWidget(self.tags_layout.count() - 1, checkbox)
+
+        # Forzar actualización del layout
+        self.tags_container.updateGeometry()
+        self.tags_container.update()
 
     def _on_filter_changed(self):
         """Maneja cambio en filtros"""
@@ -260,19 +311,32 @@ class ProjectTagFilterWidget(QWidget):
         self.match_all = state == Qt.CheckState.Checked.value
         self._on_filter_changed()
 
+    def _on_cache_invalidated(self):
+        """Callback cuando se invalida el caché del tag manager"""
+        # Recargar tags manteniendo selección actual
+        self._load_tags()
+
     def _select_all(self):
         """Selecciona todos los tags"""
-        # Crear lista de checkboxes antes de iterar para evitar RuntimeError
-        checkboxes = list(self.tag_checkboxes.values())
-        for checkbox in checkboxes:
+        # Bloquear señales temporalmente para evitar múltiples emisiones
+        for checkbox in self.tag_checkboxes.values():
+            checkbox.blockSignals(True)
             checkbox.setChecked(True)
+            checkbox.blockSignals(False)
+
+        # Emitir señal una sola vez
+        self._on_filter_changed()
 
     def _select_none(self):
         """Deselecciona todos los tags"""
-        # Crear lista de checkboxes antes de iterar para evitar RuntimeError
-        checkboxes = list(self.tag_checkboxes.values())
-        for checkbox in checkboxes:
+        # Bloquear señales temporalmente para evitar múltiples emisiones
+        for checkbox in self.tag_checkboxes.values():
+            checkbox.blockSignals(True)
             checkbox.setChecked(False)
+            checkbox.blockSignals(False)
+
+        # Emitir señal una sola vez
+        self._on_filter_changed()
 
     def get_selected_tag_ids(self) -> List[int]:
         """
@@ -294,7 +358,12 @@ class ProjectTagFilterWidget(QWidget):
             tag_ids: Lista de IDs de tags a seleccionar
         """
         for tag_id, checkbox in self.tag_checkboxes.items():
+            checkbox.blockSignals(True)
             checkbox.setChecked(tag_id in tag_ids)
+            checkbox.blockSignals(False)
+
+        # Emitir señal una vez al final
+        self._on_filter_changed()
 
     def clear_filters(self):
         """Limpia todos los filtros"""
@@ -302,7 +371,7 @@ class ProjectTagFilterWidget(QWidget):
         self.match_all_checkbox.setChecked(False)
 
     def refresh(self):
-        """Refresca la lista de tags"""
+        """Refresca la lista de tags manteniendo selección"""
         self._load_tags()
 
     def set_project(self, project_id: int = None):
@@ -313,5 +382,7 @@ class ProjectTagFilterWidget(QWidget):
             project_id: ID del proyecto a mostrar (None = limpiar filtro)
         """
         self.project_id = project_id
-        self.clear_filters()  # Limpiar selección
+
+        # NO limpiar filtros aquí - mantener selección del usuario
+        # Solo recargar la lista de tags
         self._load_tags()
