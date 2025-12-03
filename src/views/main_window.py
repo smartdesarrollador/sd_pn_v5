@@ -210,6 +210,7 @@ class MainWindow(QMainWindow):
         self.sidebar.advanced_search_clicked.connect(self.on_advanced_search_clicked)
         self.sidebar.image_gallery_clicked.connect(self.on_image_gallery_clicked)
         self.sidebar.projects_clicked.connect(self.on_projects_clicked)
+        self.sidebar.areas_clicked.connect(self.on_areas_clicked)
         self.sidebar.table_creator_clicked.connect(self.on_table_creator_clicked)
         self.sidebar.tables_manager_clicked.connect(self.on_tables_manager_clicked)
         self.sidebar.favorites_clicked.connect(self.on_favorites_clicked)
@@ -692,6 +693,64 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'projects_window') and self.projects_window:
             self.projects_window.deleteLater()
             self.projects_window = None
+
+    def on_areas_clicked(self):
+        """Handle areas button click - toggle areas window"""
+        try:
+            logger.info("Areas button clicked")
+
+            if not self.controller:
+                logger.error("No controller available")
+                return
+
+            # TOGGLE BEHAVIOR: If window exists and is visible, close it
+            if hasattr(self, 'areas_window') and self.areas_window and self.areas_window.isVisible():
+                logger.debug("Areas window is visible - closing it (toggle)")
+                self.areas_window.close()
+                return
+
+            # Create areas window if it doesn't exist
+            if not hasattr(self, 'areas_window') or not self.areas_window:
+                from views.areas_window import AreasWindow
+
+                # Get db_manager from controller's config_manager
+                db_manager = self.config_manager.db if self.config_manager else None
+
+                if not db_manager:
+                    logger.error("No database manager available")
+                    QMessageBox.warning(
+                        self,
+                        "Error",
+                        "No se pudo acceder a la base de datos"
+                    )
+                    return
+
+                # Create areas window
+                self.areas_window = AreasWindow(
+                    db_manager=db_manager,
+                    parent=self
+                )
+                self.areas_window.closed.connect(self.on_areas_window_closed)
+
+            # Show the window
+            self.areas_window.show()
+            self.areas_window.activateWindow()
+            logger.info("Areas window opened")
+
+        except Exception as e:
+            logger.error(f"Error opening areas window: {e}", exc_info=True)
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al abrir ventana de áreas:\n{str(e)}\n\nRevisa widget_sidebar_error.log"
+            )
+
+    def on_areas_window_closed(self):
+        """Handle areas window closed"""
+        logger.info("Areas window closed")
+        if hasattr(self, 'areas_window') and self.areas_window:
+            self.areas_window.deleteLater()
+            self.areas_window = None
 
     def on_item_edit_requested_from_search(self, item):
         """Handle item edit request from Advanced Search Window"""

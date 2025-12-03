@@ -7,6 +7,8 @@ from .item import Item, ItemType
 from .config import Config
 from .process import Process, ProcessStep
 from .lista import Lista
+from .area import Area, AreaRelation, AreaComponent
+from .area_element_tag import AreaElementTag
 
 __all__ = [
     'Category',
@@ -15,5 +17,9 @@ __all__ = [
     'Config',
     'Process',
     'ProcessStep',
-    'Lista'
+    'Lista',
+    'Area',
+    'AreaRelation',
+    'AreaComponent',
+    'AreaElementTag'
 ]

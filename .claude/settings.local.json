@@ -61,7 +61,8 @@
       "Bash(git add:*)",
       "Bash(if not exist \"backups\" mkdir \"backups\")",
       "Bash(git commit:*)",
-      "Bash(if not exist \"C:\\Users\\ASUS\\Desktop\\proyectos_python\\widget_sidebar\\util\\FASE4_COMPLETADA.md\" echo.)"
+      "Bash(if not exist \"C:\\Users\\ASUS\\Desktop\\proyectos_python\\widget_sidebar\\util\\FASE4_COMPLETADA.md\" echo.)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

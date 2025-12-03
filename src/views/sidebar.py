@@ -96,6 +96,9 @@ class Sidebar(QWidget):
     # Signal emitted when projects button is clicked
     projects_clicked = pyqtSignal()
 
+    # Signal emitted when areas button is clicked
+    areas_clicked = pyqtSignal()
+
     # Signal emitted when close app button is clicked from menu
     close_app_requested = pyqtSignal()
 
@@ -828,6 +831,7 @@ class Sidebar(QWidget):
                 self.quick_access_panel.web_static_create_clicked.connect(lambda: self.web_static_create_clicked.emit())
                 self.quick_access_panel.image_gallery_clicked.connect(lambda: self.image_gallery_clicked.emit())
                 self.quick_access_panel.projects_clicked.connect(lambda: self.projects_clicked.emit())
+                self.quick_access_panel.areas_clicked.connect(lambda: self.areas_clicked.emit())
                 self.quick_access_panel.close_app_clicked.connect(lambda: self.close_app_requested.emit())
 
         # Toggle visibility

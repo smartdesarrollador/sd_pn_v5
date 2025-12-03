@@ -40,6 +40,7 @@ class QuickAccessPanel(QWidget):
     web_static_create_clicked = pyqtSignal()
     image_gallery_clicked = pyqtSignal()  # NEW: Image Gallery
     projects_clicked = pyqtSignal()  # NEW: Projects Manager
+    areas_clicked = pyqtSignal()  # NEW: Areas Manager
     close_app_clicked = pyqtSignal()  # NEW: Close application
 
     def __init__(self, parent=None):
@@ -123,6 +124,7 @@ class QuickAccessPanel(QWidget):
         buttons_config = [
             ("🔍⚡", "Búsqueda Avanzada", self.on_advanced_search_clicked),
             ("📁", "Proyectos", self.on_projects_clicked),  # NEW: Projects Manager
+            ("🏢", "Áreas", self.on_areas_clicked),  # NEW: Areas Manager
             ("🖼️", "Galería de Imágenes", self.on_image_gallery_clicked),
             ("🤖", "IA Bulk", self.on_ai_bulk_clicked),
             ("🤖📊", "IA Tabla", self.on_ai_table_clicked),
@@ -293,6 +295,11 @@ class QuickAccessPanel(QWidget):
     def on_projects_clicked(self):
         """Handle projects button click"""
         self.projects_clicked.emit()
+        self.hide()
+
+    def on_areas_clicked(self):
+        """Handle areas button click"""
+        self.areas_clicked.emit()
         self.hide()
 
     def on_close_clicked(self):

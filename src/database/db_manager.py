@@ -6715,6 +6715,876 @@ class DBManager:
             logger.error(f"Error actualizando tags de componente {component_id}: {e}")
             return False
 
+    # ==================== GESTIÓN DE ÁREAS ====================
+
+    def add_area(self, name: str, description: str = "",
+                  color: str = "#9b59b6", icon: str = "🏢") -> int:
+        """
+        Agrega una nueva área
+
+        Args:
+            name: Nombre del área
+            description: Descripción del área
+            color: Color en formato hex
+            icon: Emoji icono
+
+        Returns:
+            int: ID del área creada
+        """
+        query = """
+            INSERT INTO areas (name, description, color, icon)
+            VALUES (?, ?, ?, ?)
+        """
+        return self.execute_update(query, (name, description, color, icon))
+
+    def get_area(self, area_id: int) -> Optional[Dict]:
+        """
+        Obtiene un área por ID
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            Optional[Dict]: Diccionario con datos del área o None
+        """
+        query = "SELECT * FROM areas WHERE id = ?"
+        result = self.execute_query(query, (area_id,))
+        return result[0] if result else None
+
+    def get_all_areas(self, active_only: bool = True) -> List[Dict]:
+        """
+        Obtiene todas las áreas
+
+        Args:
+            active_only: Si True, solo retorna áreas activas
+
+        Returns:
+            List[Dict]: Lista de áreas
+        """
+        if active_only:
+            query = "SELECT * FROM areas WHERE is_active = 1 ORDER BY name"
+        else:
+            query = "SELECT * FROM areas ORDER BY name"
+
+        return self.execute_query(query)
+
+    def update_area(self, area_id: int, **kwargs) -> bool:
+        """
+        Actualiza un área
+
+        Args:
+            area_id: ID del área
+            **kwargs: Campos a actualizar (name, description, color, icon, is_active)
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        allowed_fields = ['name', 'description', 'color', 'icon', 'is_active']
+        updates = []
+        values = []
+
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                updates.append(f"{key} = ?")
+                values.append(value)
+
+        if not updates:
+            return False
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        values.append(area_id)
+
+        query = f"UPDATE areas SET {', '.join(updates)} WHERE id = ?"
+
+        try:
+            self.execute_update(query, tuple(values))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando área {area_id}: {e}")
+            return False
+
+    def delete_area(self, area_id: int) -> bool:
+        """
+        Elimina un área (soft delete)
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        query = "UPDATE areas SET is_active = 0 WHERE id = ?"
+        try:
+            self.execute_update(query, (area_id,))
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando área {area_id}: {e}")
+            return False
+
+    def search_areas(self, query_text: str) -> List[Dict]:
+        """
+        Busca áreas por nombre o descripción
+
+        Args:
+            query_text: Texto a buscar
+
+        Returns:
+            List[Dict]: Lista de áreas que coinciden
+        """
+        query = """
+            SELECT * FROM areas
+            WHERE (name LIKE ? OR description LIKE ?)
+            AND is_active = 1
+            ORDER BY name
+        """
+        search_pattern = f"%{query_text}%"
+        return self.execute_query(query, (search_pattern, search_pattern))
+
+    def get_area_summary(self, area_id: int) -> Dict:
+        """
+        Obtiene resumen de un área con estadísticas
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            Dict: Resumen con cantidades de relaciones y componentes
+        """
+        area = self.get_area(area_id)
+        if not area:
+            return {}
+
+        # Contar relaciones
+        relations_query = "SELECT COUNT(*) as count FROM area_relations WHERE area_id = ?"
+        relations_count = self.execute_query(relations_query, (area_id,))[0]['count']
+
+        # Contar componentes
+        components_query = "SELECT COUNT(*) as count FROM area_components WHERE area_id = ?"
+        components_count = self.execute_query(components_query, (area_id,))[0]['count']
+
+        area['relations_count'] = relations_count
+        area['components_count'] = components_count
+        area['total_elements'] = relations_count + components_count
+
+        return area
+
+    # ==================== RELACIONES DE ÁREAS ====================
+
+    def add_area_relation(self, area_id: int, entity_type: str, entity_id: int,
+                          description: str = "", order_index: int = 0) -> int:
+        """
+        Agrega una relación entre área y entidad
+
+        Args:
+            area_id: ID del área
+            entity_type: Tipo de entidad ('tag', 'process', 'list', 'table', 'category', 'item')
+            entity_id: ID de la entidad
+            description: Descripción contextual
+            order_index: Índice de orden
+
+        Returns:
+            int: ID de la relación creada
+        """
+        query = """
+            INSERT INTO area_relations (area_id, entity_type, entity_id, description, order_index)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        return self.execute_update(query, (area_id, entity_type, entity_id, description, order_index))
+
+    def get_area_relations(self, area_id: int) -> List[Dict]:
+        """
+        Obtiene todas las relaciones de un área
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de relaciones
+        """
+        query = """
+            SELECT * FROM area_relations
+            WHERE area_id = ?
+            ORDER BY order_index ASC
+        """
+        return self.execute_query(query, (area_id,))
+
+    def remove_area_relation(self, relation_id: int) -> bool:
+        """
+        Elimina una relación área-entidad
+
+        Args:
+            relation_id: ID de la relación
+
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        query = "DELETE FROM area_relations WHERE id = ?"
+        try:
+            self.execute_update(query, (relation_id,))
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando relación {relation_id}: {e}")
+            return False
+
+    def remove_area_relation_by_entity(self, area_id: int, entity_type: str,
+                                       entity_id: int) -> bool:
+        """
+        Elimina una relación específica por entidad
+
+        Args:
+            area_id: ID del área
+            entity_type: Tipo de entidad
+            entity_id: ID de la entidad
+
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        query = """
+            DELETE FROM area_relations
+            WHERE area_id = ? AND entity_type = ? AND entity_id = ?
+        """
+        try:
+            self.execute_update(query, (area_id, entity_type, entity_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando relación: {e}")
+            return False
+
+    def update_relation_description(self, relation_id: int, description: str) -> bool:
+        """
+        Actualiza la descripción de una relación de área
+
+        Args:
+            relation_id: ID de la relación
+            description: Nueva descripción
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        query = "UPDATE area_relations SET description = ? WHERE id = ?"
+        try:
+            self.execute_update(query, (description, relation_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando descripción de relación {relation_id}: {e}")
+            return False
+
+    def update_relation_order(self, relation_id: int, order_index: int) -> bool:
+        """
+        Actualiza el orden de una relación de área
+
+        Args:
+            relation_id: ID de la relación
+            order_index: Nuevo índice de orden
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        query = "UPDATE area_relations SET order_index = ? WHERE id = ?"
+        try:
+            self.execute_update(query, (order_index, relation_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando orden de relación {relation_id}: {e}")
+            return False
+
+    # ==================== COMPONENTES DE ÁREAS ====================
+
+    def add_area_component(self, area_id: int, component_type: str,
+                           content: str = "", order_index: int = 0) -> int:
+        """
+        Agrega un componente estructural a un área
+
+        Args:
+            area_id: ID del área
+            component_type: Tipo de componente ('divider', 'comment', 'alert', 'note')
+            content: Contenido del componente
+            order_index: Índice de orden
+
+        Returns:
+            int: ID del componente creado
+        """
+        query = """
+            INSERT INTO area_components (area_id, component_type, content, order_index)
+            VALUES (?, ?, ?, ?)
+        """
+        return self.execute_update(query, (area_id, component_type, content, order_index))
+
+    def get_area_components(self, area_id: int) -> List[Dict]:
+        """
+        Obtiene todos los componentes de un área
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de componentes
+        """
+        query = """
+            SELECT * FROM area_components
+            WHERE area_id = ?
+            ORDER BY order_index ASC
+        """
+        return self.execute_query(query, (area_id,))
+
+    def remove_area_component(self, component_id: int) -> bool:
+        """
+        Elimina un componente de área
+
+        Args:
+            component_id: ID del componente
+
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        query = "DELETE FROM area_components WHERE id = ?"
+        try:
+            self.execute_update(query, (component_id,))
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando componente {component_id}: {e}")
+            return False
+
+    def update_component_content(self, component_id: int, content: str) -> bool:
+        """
+        Actualiza el contenido de un componente de área
+
+        Args:
+            component_id: ID del componente
+            content: Nuevo contenido
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        query = "UPDATE area_components SET content = ? WHERE id = ?"
+        try:
+            self.execute_update(query, (content, component_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando contenido de componente {component_id}: {e}")
+            return False
+
+    def update_component_order(self, component_id: int, order_index: int) -> bool:
+        """
+        Actualiza el orden de un componente de área
+
+        Args:
+            component_id: ID del componente
+            order_index: Nuevo índice de orden
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        query = "UPDATE area_components SET order_index = ? WHERE id = ?"
+        try:
+            self.execute_update(query, (order_index, component_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando orden de componente {component_id}: {e}")
+            return False
+
+    def get_area_content_ordered(self, area_id: int) -> List[Dict]:
+        """
+        Obtiene todo el contenido de un área (relaciones y componentes) ordenado
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de elementos ordenados por order_index
+        """
+        query = """
+            SELECT
+                'relation' as type,
+                id,
+                area_id,
+                entity_type,
+                entity_id,
+                description,
+                order_index,
+                NULL as component_type,
+                NULL as content,
+                created_at
+            FROM area_relations
+            WHERE area_id = ?
+
+            UNION ALL
+
+            SELECT
+                'component' as type,
+                id,
+                area_id,
+                NULL as entity_type,
+                NULL as entity_id,
+                NULL as description,
+                order_index,
+                component_type,
+                content,
+                created_at
+            FROM area_components
+            WHERE area_id = ?
+
+            ORDER BY order_index ASC
+        """
+        return self.execute_query(query, (area_id, area_id))
+
+    # ==================== TAGS DE ELEMENTOS DE ÁREA ====================
+
+    def add_area_element_tag(self, name: str, color: str = "#9b59b6",
+                             description: str = "") -> int:
+        """
+        Crea un nuevo tag de elemento de área
+
+        Args:
+            name: Nombre del tag
+            color: Color en formato hex
+            description: Descripción del tag
+
+        Returns:
+            int: ID del tag creado
+        """
+        query = """
+            INSERT INTO area_element_tags (name, color, description)
+            VALUES (?, ?, ?)
+        """
+        return self.execute_update(query, (name, color, description))
+
+    def get_all_area_element_tags(self) -> List[Dict]:
+        """
+        Obtiene todos los tags de elementos de área
+
+        Returns:
+            List[Dict]: Lista de tags
+        """
+        query = "SELECT * FROM area_element_tags ORDER BY name"
+        return self.execute_query(query)
+
+    def get_area_element_tag(self, tag_id: int) -> Optional[Dict]:
+        """
+        Obtiene un tag de elemento de área por ID
+
+        Args:
+            tag_id: ID del tag
+
+        Returns:
+            Optional[Dict]: Tag o None
+        """
+        query = "SELECT * FROM area_element_tags WHERE id = ?"
+        result = self.execute_query(query, (tag_id,))
+        return result[0] if result else None
+
+    def get_area_element_tag_by_id(self, tag_id: int) -> Optional[Dict]:
+        """Alias de get_area_element_tag para compatibilidad"""
+        return self.get_area_element_tag(tag_id)
+
+    def get_area_element_tag_by_name(self, name: str) -> Optional[Dict]:
+        """
+        Obtiene un tag de elemento de área por nombre
+
+        Args:
+            name: Nombre del tag
+
+        Returns:
+            Optional[Dict]: Tag o None
+        """
+        query = "SELECT * FROM area_element_tags WHERE name = ?"
+        result = self.execute_query(query, (name,))
+        return result[0] if result else None
+
+    def search_area_element_tags(self, query_text: str) -> List[Dict]:
+        """
+        Busca tags de elementos de área por nombre
+
+        Args:
+            query_text: Texto a buscar
+
+        Returns:
+            List[Dict]: Lista de tags que coinciden
+        """
+        query = """
+            SELECT * FROM area_element_tags
+            WHERE name LIKE ?
+            ORDER BY name
+        """
+        search_pattern = f"%{query_text}%"
+        return self.execute_query(query, (search_pattern,))
+
+    def get_tag_usage_count(self, tag_id: int) -> int:
+        """
+        Obtiene el conteo de uso de un tag de área
+
+        Args:
+            tag_id: ID del tag
+
+        Returns:
+            int: Número de relaciones que usan el tag
+        """
+        query = """
+            SELECT COUNT(*) as count
+            FROM area_element_tag_associations
+            WHERE tag_id = ?
+        """
+        result = self.execute_query(query, (tag_id,))
+        return result[0]['count'] if result else 0
+
+    def update_area_element_tag(self, tag_id: int, name: str = None,
+                                 color: str = None, description: str = None) -> bool:
+        """
+        Actualiza un tag de elemento de área
+
+        Args:
+            tag_id: ID del tag
+            name: Nuevo nombre (opcional)
+            color: Nuevo color (opcional)
+            description: Nueva descripción (opcional)
+
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        updates = []
+        values = []
+
+        if name is not None:
+            updates.append("name = ?")
+            values.append(name)
+
+        if color is not None:
+            updates.append("color = ?")
+            values.append(color)
+
+        if description is not None:
+            updates.append("description = ?")
+            values.append(description)
+
+        if not updates:
+            return False
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        values.append(tag_id)
+
+        query = f"UPDATE area_element_tags SET {', '.join(updates)} WHERE id = ?"
+
+        try:
+            self.execute_update(query, tuple(values))
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando tag {tag_id}: {e}")
+            return False
+
+    def delete_area_element_tag(self, tag_id: int) -> bool:
+        """
+        Elimina un tag de elemento de área
+
+        Args:
+            tag_id: ID del tag
+
+        Returns:
+            bool: True si se eliminó correctamente
+        """
+        query = "DELETE FROM area_element_tags WHERE id = ?"
+        try:
+            self.execute_update(query, (tag_id,))
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando tag {tag_id}: {e}")
+            return False
+
+    def assign_tag_to_area_relation(self, relation_id: int, tag_id: int) -> bool:
+        """
+        Asigna un tag a una relación de área
+
+        Args:
+            relation_id: ID de la relación
+            tag_id: ID del tag
+
+        Returns:
+            bool: True si se asignó correctamente
+        """
+        query = """
+            INSERT OR IGNORE INTO area_element_tag_associations
+                (area_relation_id, tag_id)
+            VALUES (?, ?)
+        """
+        try:
+            self.execute_update(query, (relation_id, tag_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error asignando tag a relación: {e}")
+            return False
+
+    def assign_tag_to_area_component(self, component_id: int, tag_id: int) -> bool:
+        """
+        Asigna un tag a un componente de área
+
+        Args:
+            component_id: ID del componente
+            tag_id: ID del tag
+
+        Returns:
+            bool: True si se asignó correctamente
+        """
+        query = """
+            INSERT OR IGNORE INTO area_element_tag_associations
+                (area_component_id, tag_id)
+            VALUES (?, ?)
+        """
+        try:
+            self.execute_update(query, (component_id, tag_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error asignando tag a componente: {e}")
+            return False
+
+    def remove_tag_from_area_relation(self, relation_id: int, tag_id: int) -> bool:
+        """
+        Remueve un tag de una relación de área
+
+        Args:
+            relation_id: ID de la relación
+            tag_id: ID del tag
+
+        Returns:
+            bool: True si se removió correctamente
+        """
+        query = """
+            DELETE FROM area_element_tag_associations
+            WHERE area_relation_id = ? AND tag_id = ?
+        """
+        try:
+            self.execute_update(query, (relation_id, tag_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error removiendo tag de relación: {e}")
+            return False
+
+    def remove_tag_from_area_component(self, component_id: int, tag_id: int) -> bool:
+        """
+        Remueve un tag de un componente de área
+
+        Args:
+            component_id: ID del componente
+            tag_id: ID del tag
+
+        Returns:
+            bool: True si se removió correctamente
+        """
+        query = """
+            DELETE FROM area_element_tag_associations
+            WHERE area_component_id = ? AND tag_id = ?
+        """
+        try:
+            self.execute_update(query, (component_id, tag_id))
+            return True
+        except Exception as e:
+            logger.error(f"Error removiendo tag de componente: {e}")
+            return False
+
+    def get_tags_for_area_relation(self, relation_id: int) -> List[Dict]:
+        """
+        Obtiene todos los tags de una relación de área
+
+        Args:
+            relation_id: ID de la relación
+
+        Returns:
+            List[Dict]: Lista de tags
+        """
+        query = """
+            SELECT t.* FROM area_element_tags t
+            INNER JOIN area_element_tag_associations a ON t.id = a.tag_id
+            WHERE a.area_relation_id = ?
+            ORDER BY t.name
+        """
+        return self.execute_query(query, (relation_id,))
+
+    def get_tags_for_area_component(self, component_id: int) -> List[Dict]:
+        """
+        Obtiene todos los tags de un componente de área
+
+        Args:
+            component_id: ID del componente
+
+        Returns:
+            List[Dict]: Lista de tags
+        """
+        query = """
+            SELECT t.* FROM area_element_tags t
+            INNER JOIN area_element_tag_associations a ON t.id = a.tag_id
+            WHERE a.area_component_id = ?
+            ORDER BY t.name
+        """
+        return self.execute_query(query, (component_id,))
+
+    def get_area_element_tags_for_area(self, area_id: int) -> List[Dict]:
+        """
+        Obtiene todos los tags únicos usados en un área
+
+        Args:
+            area_id: ID del área
+
+        Returns:
+            List[Dict]: Lista de tags únicos
+        """
+        query = """
+            SELECT DISTINCT t.*
+            FROM area_element_tags t
+            INNER JOIN area_element_tag_associations a ON t.id = a.tag_id
+            LEFT JOIN area_relations r ON a.area_relation_id = r.id
+            LEFT JOIN area_components c ON a.area_component_id = c.id
+            WHERE r.area_id = ? OR c.area_id = ?
+            ORDER BY t.name
+        """
+        return self.execute_query(query, (area_id, area_id))
+
+    def update_area_relation_tags(self, relation_id: int, tag_ids: List[int]) -> bool:
+        """
+        Actualiza todos los tags de una relación de área
+        (reemplaza los tags existentes)
+
+        Args:
+            relation_id: ID de la relación de área
+            tag_ids: Lista de IDs de tags a asociar
+
+        Returns:
+            True si se actualizó correctamente
+        """
+        try:
+            with self.transaction() as conn:
+                # Eliminar todas las asociaciones existentes
+                conn.execute("""
+                    DELETE FROM area_element_tag_associations
+                    WHERE area_relation_id = ?
+                """, (relation_id,))
+
+                # Agregar las nuevas asociaciones
+                for tag_id in tag_ids:
+                    conn.execute("""
+                        INSERT INTO area_element_tag_associations
+                            (area_relation_id, tag_id)
+                        VALUES (?, ?)
+                    """, (relation_id, tag_id))
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error actualizando tags de relación {relation_id}: {e}")
+            return False
+
+    def get_area_relations_by_tag(self, tag_id: int) -> List[Dict]:
+        """
+        Obtiene todas las relaciones que tienen un tag específico
+
+        Args:
+            tag_id: ID del tag
+
+        Returns:
+            Lista de relaciones que tienen ese tag
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.execute("""
+                SELECT ar.id, ar.area_id, ar.entity_type, ar.entity_id,
+                       ar.description, ar.order_index, ar.created_at
+                FROM area_relations ar
+                INNER JOIN area_element_tag_associations a ON ar.id = a.area_relation_id
+                WHERE a.tag_id = ?
+                ORDER BY ar.order_index ASC
+            """, (tag_id,))
+
+            return [dict(row) for row in cursor.fetchall()]
+
+        except Exception as e:
+            logger.error(f"Error obteniendo relaciones con tag {tag_id}: {e}")
+            return []
+
+    def get_tags_for_area_component_method(self, component_id: int) -> List[Dict]:
+        """
+        Obtiene los tags asociados a un componente de área específico
+
+        Args:
+            component_id: ID del componente de área
+
+        Returns:
+            Lista de tags asociados al componente
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.execute("""
+                SELECT t.id, t.name, t.color, t.description,
+                       t.created_at, t.updated_at
+                FROM area_element_tags t
+                INNER JOIN area_element_tag_associations a ON t.id = a.tag_id
+                WHERE a.area_component_id = ?
+                ORDER BY t.name
+            """, (component_id,))
+
+            return [dict(row) for row in cursor.fetchall()]
+
+        except Exception as e:
+            logger.error(f"Error obteniendo tags para componente {component_id}: {e}")
+            return []
+
+    def get_area_components_by_tag(self, tag_id: int) -> List[Dict]:
+        """
+        Obtiene todos los componentes que tienen un tag específico
+
+        Args:
+            tag_id: ID del tag
+
+        Returns:
+            Lista de componentes que tienen ese tag
+        """
+        try:
+            conn = self.connect()
+            cursor = conn.execute("""
+                SELECT ac.id, ac.area_id, ac.component_type, ac.content,
+                       ac.order_index, ac.created_at
+                FROM area_components ac
+                INNER JOIN area_element_tag_associations a ON ac.id = a.area_component_id
+                WHERE a.tag_id = ?
+                ORDER BY ac.order_index ASC
+            """, (tag_id,))
+
+            return [dict(row) for row in cursor.fetchall()]
+
+        except Exception as e:
+            logger.error(f"Error obteniendo componentes con tag {tag_id}: {e}")
+            return []
+
+    def update_area_component_tags(self, component_id: int, tag_ids: List[int]) -> bool:
+        """
+        Actualiza todos los tags de un componente de área
+        (reemplaza los tags existentes)
+
+        Args:
+            component_id: ID del componente de área
+            tag_ids: Lista de IDs de tags a asociar
+
+        Returns:
+            True si se actualizó correctamente
+        """
+        try:
+            with self.transaction() as conn:
+                # Eliminar todas las asociaciones existentes
+                conn.execute("""
+                    DELETE FROM area_element_tag_associations
+                    WHERE area_component_id = ?
+                """, (component_id,))
+
+                # Agregar las nuevas asociaciones
+                for tag_id in tag_ids:
+                    conn.execute("""
+                        INSERT INTO area_element_tag_associations
+                            (area_component_id, tag_id)
+                        VALUES (?, ?)
+                    """, (component_id, tag_id))
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Error actualizando tags de componente {component_id}: {e}")
+            return False
+
     # ==================== Context Manager ====================
 
     def __enter__(self):
