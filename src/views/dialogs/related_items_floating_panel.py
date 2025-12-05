@@ -2,7 +2,8 @@
 Related Items Floating Panel - Displays items related to tags, categories, or lists
 """
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QScrollArea, QPushButton, QCheckBox, QSizePolicy, QGraphicsDropShadowEffect)
+                             QScrollArea, QPushButton, QCheckBox, QSizePolicy,
+                             QGraphicsDropShadowEffect, QLineEdit)
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QCursor, QColor
 import sys
@@ -241,10 +242,68 @@ class RelatedItemsFloatingPanel(QWidget):
 
         main_layout.addWidget(self.display_options_widget)
 
+        # ========== SEARCH BAR ==========
+        search_widget = QWidget()
+        search_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme.get_color('background_mid')};
+                border-bottom: 1px solid {self.theme.get_color('surface')};
+            }}
+        """)
+        search_layout = QHBoxLayout(search_widget)
+        search_layout.setContentsMargins(15, 8, 15, 8)
+        search_layout.setSpacing(10)
+
+        # Search icon
+        search_icon = QLabel("🔍")
+        search_icon.setStyleSheet(f"""
+            QLabel {{
+                color: {self.theme.get_color('text_secondary')};
+                font-size: 14pt;
+            }}
+        """)
+        search_layout.addWidget(search_icon)
+
+        # Search input
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Buscar items por nombre, contenido o descripción...")
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(self.on_search_changed)
+        self.search_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {self.theme.get_color('background_deep')};
+                color: {self.theme.get_color('text_primary')};
+                border: 1px solid {self.theme.get_color('surface')};
+                border-radius: 0px;
+                padding: 8px 12px;
+                font-size: 10pt;
+            }}
+            QLineEdit:focus {{
+                border-color: {self.theme.get_color('primary')};
+            }}
+            QLineEdit::placeholder {{
+                color: {self.theme.get_color('text_secondary')};
+            }}
+        """)
+        search_layout.addWidget(self.search_input)
+
+        # Results counter
+        self.results_label = QLabel("")
+        self.results_label.setStyleSheet(f"""
+            QLabel {{
+                color: {self.theme.get_color('text_secondary')};
+                font-size: 9pt;
+                padding-right: 5px;
+            }}
+        """)
+        search_layout.addWidget(self.results_label)
+
+        main_layout.addWidget(search_widget)
+
         # ========== ITEMS COUNT HEADER ==========
-        items_count_label = QLabel(f"━━━ Items ({len(self.items)}) ━━━")
-        items_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        items_count_label.setStyleSheet("""
+        self.items_count_label = QLabel(f"━━━ Items ({len(self.items)}) ━━━")
+        self.items_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.items_count_label.setStyleSheet("""
             QLabel {
                 color: #888888;
                 font-size: 10pt;
@@ -253,7 +312,7 @@ class RelatedItemsFloatingPanel(QWidget):
                 background-color: transparent;
             }
         """)
-        main_layout.addWidget(items_count_label)
+        main_layout.addWidget(self.items_count_label)
 
         # ========== SCROLL AREA FOR ITEMS ==========
         self.scroll_area = QScrollArea()
@@ -370,8 +429,8 @@ class RelatedItemsFloatingPanel(QWidget):
             QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
-                border: 2px solid {self.theme.get_color('primary')};
-                border-radius: 3px;
+                border: 1px solid {self.theme.get_color('primary')};
+                border-radius: 0px;
                 background-color: {self.theme.get_color('background_deep')};
             }}
             QCheckBox::indicator:checked {{
@@ -397,8 +456,8 @@ class RelatedItemsFloatingPanel(QWidget):
             QPushButton {{
                 background-color: {bg_color};
                 color: {self.theme.get_color('text_primary')};
-                border: none;
-                border-radius: 4px;
+                border: 1px solid {self.theme.get_color('primary')};
+                border-radius: 0px;
                 padding: 6px 12px;
                 font-size: 9pt;
                 font-weight: bold;
@@ -412,6 +471,7 @@ class RelatedItemsFloatingPanel(QWidget):
             QPushButton:disabled {{
                 background-color: {self.theme.get_color('surface')};
                 color: {self.theme.get_color('text_secondary')};
+                border-color: {self.theme.get_color('surface')};
             }}
         """
 
@@ -446,6 +506,58 @@ class RelatedItemsFloatingPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
+    def on_search_changed(self, text: str):
+        """Handle search text changes - filter items in real-time"""
+        search_term = text.lower().strip()
+
+        visible_count = 0
+        total_count = 0
+
+        # Iterate through all item cards
+        for i in range(self.items_layout.count() - 1):  # -1 to skip stretch
+            widget = self.items_layout.itemAt(i).widget()
+            if isinstance(widget, RelatedItemCard):
+                total_count += 1
+                item = widget.item
+
+                # Search in multiple fields
+                if not search_term:
+                    # No search - show all
+                    widget.setVisible(True)
+                    visible_count += 1
+                else:
+                    # Check if search term matches - asegurar que sea booleano
+                    matches = False
+
+                    # Buscar en label
+                    if search_term in item.label.lower():
+                        matches = True
+                    # Buscar en content
+                    elif item.content and search_term in item.content.lower():
+                        matches = True
+                    # Buscar en description
+                    elif item.description and search_term in item.description.lower():
+                        matches = True
+                    # Buscar en tags
+                    elif hasattr(item, 'tags') and item.tags:
+                        for tag in item.tags:
+                            if search_term in tag.lower():
+                                matches = True
+                                break
+
+                    widget.setVisible(matches)
+                    if matches:
+                        visible_count += 1
+
+        # Update results label
+        if search_term:
+            self.results_label.setText(f"{visible_count}/{total_count}")
+            # Update items count header
+            self.items_count_label.setText(f"━━━ Mostrando {visible_count} de {total_count} items ━━━")
+        else:
+            self.results_label.setText("")
+            self.items_count_label.setText(f"━━━ Items ({total_count}) ━━━")
+
     def on_display_options_changed(self):
         """Handle changes in display options checkboxes"""
         self.show_labels = self.show_labels_checkbox.isChecked()
@@ -462,6 +574,10 @@ class RelatedItemsFloatingPanel(QWidget):
 
         # Reload items with new display options
         self.load_items()
+
+        # Reapply search filter if active
+        if self.search_input.text():
+            self.on_search_changed(self.search_input.text())
 
     def on_item_selection_changed(self, item: Item, is_checked: bool):
         """Handle cuando cambia la selección de un item"""
@@ -756,30 +872,30 @@ class RelatedItemsFloatingPanel(QWidget):
             QWidget {{
                 background-color: {self.theme.get_color('background_deep')};
                 color: {self.theme.get_color('text_primary')};
-                border: 2px solid {self.theme.get_color('primary')};
-                border-radius: 12px;
+                border: 1px solid {self.theme.get_color('primary')};
+                border-radius: 0px;
             }}
 
             /* Scroll Area mejorado */
             QScrollArea {{
                 background-color: transparent;
                 border: none;
-                border-radius: 8px;
+                border-radius: 0px;
             }}
 
             /* Scrollbar vertical personalizado */
             QScrollBar:vertical {{
                 background-color: {self.theme.get_color('background_mid')};
-                width: 12px;
-                border-radius: 6px;
+                width: 10px;
+                border-radius: 0px;
                 margin: 0px;
             }}
 
             QScrollBar::handle:vertical {{
                 background-color: {self.theme.get_color('primary')};
                 min-height: 30px;
-                border-radius: 6px;
-                margin: 2px;
+                border-radius: 0px;
+                margin: 0px;
             }}
 
             QScrollBar::handle:vertical:hover {{
@@ -799,16 +915,16 @@ class RelatedItemsFloatingPanel(QWidget):
             /* Scrollbar horizontal */
             QScrollBar:horizontal {{
                 background-color: {self.theme.get_color('background_mid')};
-                height: 12px;
-                border-radius: 6px;
+                height: 10px;
+                border-radius: 0px;
                 margin: 0px;
             }}
 
             QScrollBar::handle:horizontal {{
                 background-color: {self.theme.get_color('primary')};
                 min-width: 30px;
-                border-radius: 6px;
-                margin: 2px;
+                border-radius: 0px;
+                margin: 0px;
             }}
 
             QScrollBar::handle:horizontal:hover {{
@@ -825,21 +941,18 @@ class RelatedItemsFloatingPanel(QWidget):
                 background-color: {self.theme.get_color('surface')};
                 color: {self.theme.get_color('text_primary')};
                 border: 1px solid {self.theme.get_color('primary')};
-                border-radius: 6px;
+                border-radius: 0px;
                 padding: 8px 16px;
                 font-weight: bold;
-                transition: all 0.3s ease;
             }}
 
             QPushButton:hover {{
                 background-color: {self.theme.get_color('primary')};
                 border-color: {self.theme.get_color('accent')};
-                transform: translateY(-2px);
             }}
 
             QPushButton:pressed {{
                 background-color: {self.theme.get_color('accent')};
-                transform: translateY(0px);
             }}
 
             QPushButton:disabled {{
@@ -863,8 +976,8 @@ class RelatedItemsFloatingPanel(QWidget):
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-                border: 2px solid {self.theme.get_color('primary')};
-                border-radius: 4px;
+                border: 1px solid {self.theme.get_color('primary')};
+                border-radius: 0px;
                 background-color: {self.theme.get_color('background_deep')};
             }}
 
