@@ -15,6 +15,8 @@ import logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from views.item_editor_dialog import ItemEditorDialog
+from views.widgets.category_tag_selector import CategoryTagSelector
+from core.category_tag_manager import CategoryTagManager
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +299,8 @@ class QuickCreateDialog(QDialog):
         # Create custom dialog for category with tags
         category_dialog = QDialog(self)
         category_dialog.setWindowTitle("Nueva Categoría")
-        category_dialog.setFixedSize(450, 280)
+        category_dialog.setMinimumSize(450, 400)
+        category_dialog.resize(500, 450)
 
         dialog_layout = QVBoxLayout()
         dialog_layout.setSpacing(10)
@@ -316,14 +319,15 @@ class QuickCreateDialog(QDialog):
         # Add spacing
         dialog_layout.addSpacing(10)
 
-        # Tags label and input (optional)
+        # Tags label
         tags_label = QLabel("Tags (opcional):")
         dialog_layout.addWidget(tags_label)
 
-        tags_input = QLineEdit()
-        tags_input.setPlaceholderText("backend, programacion, desarrollo...")
-        tags_input.setMinimumHeight(35)
-        dialog_layout.addWidget(tags_input)
+        # Category Tag Selector
+        category_tag_manager = CategoryTagManager(self.db)
+        tag_selector = CategoryTagSelector(category_tag_manager)
+        tag_selector.setMinimumHeight(150)
+        dialog_layout.addWidget(tag_selector)
 
         # Add spacing before buttons
         dialog_layout.addSpacing(15)
@@ -384,14 +388,16 @@ class QuickCreateDialog(QDialog):
             return
 
         name = name_input.text().strip()
-        tags_text = tags_input.text().strip()
+
+        # Obtener tags del selector
+        tag_names = tag_selector.get_selected_tag_names()
 
         if not name:
             logger.info("Category creation cancelled - empty name")
             return
 
-        # Parse tags
-        tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()] if tags_text else []
+        # Los tags ya vienen como lista de nombres del selector
+        tags = tag_names
 
         try:
             logger.info(f"Creating new category: {name} with tags: {tags}")
