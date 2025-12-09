@@ -36,6 +36,7 @@ class ItemButton(QFrame):
     url_open_requested = pyqtSignal(str)  # url to open in embedded browser
     table_view_requested = pyqtSignal(str)  # table_name to view complete table
     web_static_render_requested = pyqtSignal(object)  # item to render as WEB_STATIC
+    item_edit_requested = pyqtSignal(object)  # item to edit
 
     def __init__(self, item: Item, show_category: bool = False, show_labels: bool = True, show_tags: bool = False, show_content: bool = False, show_description: bool = False, parent=None):
         super().__init__(parent)
@@ -429,6 +430,26 @@ class ItemButton(QFrame):
             self.reveal_button.setToolTip("Revelar/Ocultar contenido sensible")
             self.reveal_button.clicked.connect(self.toggle_reveal)
             main_layout.addWidget(self.reveal_button)
+
+        # Edit button - appears before info button
+        self.edit_btn = QPushButton("✏️")
+        self.edit_btn.setFixedSize(28, 28)
+        self.edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #3e3e42;
+                border-radius: 3px;
+            }
+        """)
+        self.edit_btn.setToolTip("Editar item")
+        self.edit_btn.clicked.connect(self.edit_item)
+        main_layout.addWidget(self.edit_btn)
 
         # Info button (show details) - ALWAYS LAST
         self.info_btn = QPushButton("ℹ️")
@@ -1066,6 +1087,14 @@ class ItemButton(QFrame):
             dialog.exec()
         except Exception as e:
             logger.error(f"Error showing item details: {e}")
+
+    def edit_item(self):
+        """Emite señal para editar el item"""
+        try:
+            logger.info(f"Edit button clicked for item: {self.item.label}")
+            self.item_edit_requested.emit(self.item)
+        except Exception as e:
+            logger.error(f"Error emitting edit signal: {e}")
 
     def view_table(self):
         """Emite señal para ver la tabla completa"""
