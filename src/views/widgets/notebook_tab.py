@@ -14,7 +14,9 @@ from pathlib import Path
 import logging
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from views.widgets.tag_group_selector import TagGroupSelector
+from views.widgets.project_tag_selector import ProjectTagSelector
+from core.global_tag_manager import GlobalTagManager
+from database.db_manager import DBManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,16 @@ class NotebookTab(QWidget):
         self.categories = categories or []
         self.db_path = db_path
         self.has_unsaved_changes = False
+
+        # Initialize database and tag manager
+        self.db = None
+        self.global_tag_manager = None
+        if self.db_path:
+            try:
+                self.db = DBManager(self.db_path)
+                self.global_tag_manager = GlobalTagManager(self.db)
+            except Exception as e:
+                logger.error(f"Could not initialize DBManager or GlobalTagManager: {e}")
 
         # Debounce para auto-guardado
         self.autosave_timer = QTimer()
@@ -128,61 +140,22 @@ class NotebookTab(QWidget):
         row_layout.addLayout(type_group, 1)
         form_layout.addLayout(row_layout)
 
-        # === TAGS ===
-        tags_label = QLabel("Tags (opcional):")
+        # === TAGS (ProjectTagSelector) ===
+        tags_label = QLabel("Tags:")
         tags_label.setStyleSheet("color: #B0B0B0; font-size: 11px; font-weight: bold;")
-        self.tags_input = QLineEdit()
-        self.tags_input.setPlaceholderText("Ej: python, script, backup, produccion")
-        self.tags_input.setMinimumHeight(36)
-        self.style_input(self.tags_input)
-
         form_layout.addWidget(tags_label)
-        form_layout.addWidget(self.tags_input)
 
-        # Tag Group Selector (optional) - wrapped in scroll area
-        if self.db_path:
-            try:
-                self.tag_group_selector = TagGroupSelector(self.db_path, self)
-                self.tag_group_selector.tags_changed.connect(self.on_tag_group_changed)
-
-                # Create scroll area for tag group selector
-                tags_scroll_area = QScrollArea()
-                tags_scroll_area.setWidget(self.tag_group_selector)
-                tags_scroll_area.setWidgetResizable(True)
-                tags_scroll_area.setFixedHeight(120)  # Fixed height with scroll
-                tags_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-                tags_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-                tags_scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
-                tags_scroll_area.setStyleSheet("""
-                    QScrollArea {
-                        border: 1px solid #3d3d3d;
-                        border-radius: 4px;
-                        background-color: #2d2d2d;
-                    }
-                    QScrollBar:vertical {
-                        background-color: #2d2d2d;
-                        width: 12px;
-                        border-radius: 6px;
-                    }
-                    QScrollBar::handle:vertical {
-                        background-color: #5a5a5a;
-                        border-radius: 6px;
-                        min-height: 20px;
-                    }
-                    QScrollBar::handle:vertical:hover {
-                        background-color: #007acc;
-                    }
-                    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                        height: 0px;
-                    }
-                """)
-
-                form_layout.addWidget(tags_scroll_area)
-            except Exception as e:
-                logger.warning(f"Could not initialize TagGroupSelector: {e}")
-                self.tag_group_selector = None
+        if self.global_tag_manager:
+            self.tag_selector = ProjectTagSelector(self.global_tag_manager)
+            self.tag_selector.setMinimumHeight(150)
+            form_layout.addWidget(self.tag_selector)
         else:
-            self.tag_group_selector = None
+            # Fallback if no manager available
+            self.tags_input = QLineEdit()
+            self.tags_input.setPlaceholderText("tag1, tag2, tag3 (opcional)")
+            self.style_input(self.tags_input)
+            form_layout.addWidget(self.tags_input)
+            self.tag_selector = None
 
         # Add vertical spacer after tag section
         form_layout.addSpacing(15)
@@ -284,25 +257,19 @@ class NotebookTab(QWidget):
         """Conectar señales para auto-guardado con debounce"""
         self.name_input.textChanged.connect(self.on_content_modified)
         self.content_input.textChanged.connect(self.on_content_modified)
-        self.tags_input.textChanged.connect(self.on_content_modified)
+
+        # Connect tags signals
+        if self.tag_selector:
+            self.tag_selector.tags_changed.connect(lambda: self.on_content_modified())
+        elif hasattr(self, 'tags_input'):
+            self.tags_input.textChanged.connect(self.on_content_modified)
+
         self.description_input.textChanged.connect(self.on_content_modified)
         self.category_combo.currentIndexChanged.connect(self.on_content_modified)
         self.type_combo.currentIndexChanged.connect(self.on_content_modified)
         self.sensitive_check.stateChanged.connect(self.on_content_modified)
         self.active_check.stateChanged.connect(self.on_content_modified)
         self.archived_check.stateChanged.connect(self.on_content_modified)
-
-    def on_tag_group_changed(self, tags: list):
-        """Handle tag group selector changes"""
-        try:
-            # Actualizar el campo de tags con los tags seleccionados
-            if tags:
-                self.tags_input.setText(", ".join(tags))
-            else:
-                self.tags_input.setText("")
-            logger.debug(f"Tags updated from tag group selector: {tags}")
-        except Exception as e:
-            logger.error(f"Error updating tags from tag group selector: {e}")
 
     def on_content_modified(self):
         """Marcar como modificado y programar auto-guardado"""
@@ -347,12 +314,27 @@ class NotebookTab(QWidget):
 
     def get_data(self):
         """Obtener datos del formulario"""
+        # Get tags list
+        tags = []
+        if self.tag_selector:
+            # Get selected IDs and convert back to names
+            selected_ids = self.tag_selector.get_selected_tags()
+            for tag_id in selected_ids:
+                tag = self.global_tag_manager.get_tag(tag_id)
+                if tag:
+                    tags.append(tag.name)
+            tags_text = ", ".join(tags) if tags else ""
+        elif hasattr(self, 'tags_input'):
+            tags_text = self.tags_input.text()
+        else:
+            tags_text = ""
+
         return {
             'label': self.name_input.text(),
             'content': self.content_input.toPlainText(),
             'category_id': self.category_combo.currentData(),
             'item_type': self.type_combo.currentText(),
-            'tags': self.tags_input.text(),
+            'tags': tags_text,
             'description': self.description_input.text(),
             'is_sensitive': self.sensitive_check.isChecked(),
             'is_active': self.active_check.isChecked(),
@@ -369,12 +351,28 @@ class NotebookTab(QWidget):
 
         # Load tags
         tags_text = data.get('tags', '')
-        self.tags_input.setText(tags_text)
 
-        # También cargar en el tag group selector si existe
-        if self.tag_group_selector and tags_text:
-            tags_list = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
-            self.tag_group_selector.set_tags(tags_list)
+        if self.tag_selector and self.global_tag_manager:
+            # Convert tag names to IDs
+            tag_ids = []
+            if tags_text:
+                tags_list = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+                for tag_name in tags_list:
+                    tag = self.global_tag_manager.get_tag_by_name(tag_name)
+                    if tag:
+                        tag_ids.append(tag.id)
+                    else:
+                        # If tag doesn't exist, create it
+                        try:
+                            new_tag = self.global_tag_manager.create_tag(tag_name)
+                            if new_tag:
+                                tag_ids.append(new_tag.id)
+                        except Exception as e:
+                            logger.warning(f"Could not load tag '{tag_name}': {e}")
+
+            self.tag_selector.set_selected_tags(tag_ids)
+        elif hasattr(self, 'tags_input'):
+            self.tags_input.setText(tags_text)
 
         self.description_input.setText(data.get('description', ''))
 
@@ -405,7 +403,13 @@ class NotebookTab(QWidget):
 
         self.name_input.clear()
         self.content_input.clear()
-        self.tags_input.clear()
+
+        # Clear tags
+        if self.tag_selector:
+            self.tag_selector.clear_selection()
+        elif hasattr(self, 'tags_input'):
+            self.tags_input.clear()
+
         self.description_input.clear()
 
         # Reset checkboxes
