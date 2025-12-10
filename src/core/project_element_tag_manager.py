@@ -814,3 +814,25 @@ class ProjectElementTagManager(QObject):
 
         logger.info(f"Batch deletion: {deleted_count} de {len(tag_ids)} tags eliminados")
         return deleted_count
+
+
+    def get_tags_for_area(self, area_id: int) -> List[Any]:
+        """
+        Obtiene los tags asociados a un área.
+        Intenta usar tabla area_element_tags si existe (por nombre de tabla indicado por usuario).
+        Retorna lista de objetos con atributo .name o dicts.
+        """
+        try:
+            # Intento 1: Tabla area_element_tags como junction (tags existen en tags table)
+            query = """
+                SELECT t.*
+                FROM tags t
+                JOIN area_element_tags aet ON t.id = aet.tag_id
+                WHERE aet.area_id = ?
+                ORDER BY t.name
+            """
+            results = self.db.execute_query(query, (area_id,))
+            return [create_tag_from_db_row(row) for row in results]
+        except Exception:
+            # Fallback: Si no existe tabla, retornar vacío por ahora
+            return []

@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint
 from PyQt6.QtGui import QFont, QScreen
 from src.views.widgets.tab_content_widget import TabContentWidget
 from src.core.draft_persistence_manager import DraftPersistenceManager
+from src.core.project_element_tag_manager import ProjectElementTagManager
 from src.models.item_draft import ItemDraft
 import uuid
 import logging
@@ -95,6 +96,9 @@ class BulkItemCreatorDialog(QWidget):
         self.save_timer = QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.timeout.connect(self._save_current_tab)
+
+        # Tag Manager
+        self.tag_manager = ProjectElementTagManager(self.db)
 
         # Configuración de ventana
         self.setWindowTitle("⚡ Creador Masivo de Items")
@@ -360,7 +364,13 @@ class BulkItemCreatorDialog(QWidget):
         tab_name = name or f"Tab {self.tab_widget.count() + 1}"
 
         # Crear widget de contenido
-        tab_content = TabContentWidget(tab_id, tab_name, db_manager=self.db, parent=self)
+        tab_content = TabContentWidget(
+            tab_id, 
+            tab_name, 
+            db_manager=self.db, 
+            tag_manager=self.tag_manager,
+            parent=self
+        )
 
         # Cargar datos disponibles
         self._load_tab_available_data(tab_content)
@@ -384,7 +394,13 @@ class BulkItemCreatorDialog(QWidget):
             draft: Borrador a cargar
         """
         # Crear widget de contenido
-        tab_content = TabContentWidget(draft.tab_id, draft.tab_name, db_manager=self.db, parent=self)
+        tab_content = TabContentWidget(
+            draft.tab_id, 
+            draft.tab_name, 
+            db_manager=self.db,
+            tag_manager=self.tag_manager,
+            parent=self
+        )
 
         # Cargar datos disponibles
         self._load_tab_available_data(tab_content)

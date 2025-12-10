@@ -45,20 +45,22 @@ class TabContentWidget(QWidget):
     create_project_tag_clicked = pyqtSignal()
     create_item_tag_clicked = pyqtSignal()
 
-    def __init__(self, tab_id: str, tab_name: str = "Sin título", db_manager=None, parent=None):
+    def __init__(self, tab_id: str, tab_name: str = "Sin título", db_manager=None, tag_manager=None, parent=None):
         """
         Inicializa el widget de contenido de tab
 
         Args:
             tab_id: UUID del tab
             tab_name: Nombre del tab
-            db_manager: Instancia de DBManager para cargar tags
+            db_manager: Instancia de DBManager
+            tag_manager: Instancia de ProjectElementTagManager
             parent: Widget padre
         """
         super().__init__(parent)
         self.tab_id = tab_id
         self.tab_name = tab_name
         self.db_manager = db_manager
+        self.tag_manager = tag_manager
         self._setup_ui()
         self._connect_signals()
 
@@ -170,10 +172,10 @@ class TabContentWidget(QWidget):
         self.project_tags_section.show_for_project_or_area(has_project_or_area)
 
         # Cargar tags del proyecto seleccionado
-        if project_id is not None and self.db_manager:
+        if project_id is not None and self.tag_manager:
             try:
-                tags = self.db_manager.get_tags_for_project(project_id)
-                tag_names = [tag['name'] for tag in tags]
+                tags = self.tag_manager.get_tags_for_project(project_id)
+                tag_names = [tag.name for tag in tags]
                 self.project_tags_section.load_tags(tag_names)
                 logger.debug(f"Cargados {len(tag_names)} tags para proyecto {project_id}")
             except Exception as e:
@@ -191,12 +193,23 @@ class TabContentWidget(QWidget):
         self.project_tags_section.show_for_project_or_area(has_project_or_area)
 
         # Cargar tags del área seleccionada
-        if area_id is not None and self.db_manager:
+        if area_id is not None and self.tag_manager:
             try:
-                tags = self.db_manager.get_tags_for_area(area_id)
-                tag_names = [tag['name'] for tag in tags]
-                self.project_tags_section.load_tags(tag_names)
-                logger.debug(f"Cargados {len(tag_names)} tags para área {area_id}")
+                # Intenta usar método get_tags_for_area si existe, o lista vacía
+                if hasattr(self.tag_manager, 'get_tags_for_area'):
+                    tags = self.tag_manager.get_tags_for_area(area_id)
+                    # Verificar si devuelve objetos o dicts (si implementamos fallback a db directa)
+                    tag_names = []
+                    for tag in tags:
+                        if hasattr(tag, 'name'):
+                            tag_names.append(tag.name)
+                        elif isinstance(tag, dict) and 'name' in tag:
+                            tag_names.append(tag['name'])
+                    
+                    self.project_tags_section.load_tags(tag_names)
+                    logger.debug(f"Cargados {len(tag_names)} tags para área {area_id}")
+                else:
+                    self.project_tags_section.load_tags([])
             except Exception as e:
                 logger.error(f"Error cargando tags del área {area_id}: {e}")
         else:

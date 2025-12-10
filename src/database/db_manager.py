@@ -2088,6 +2088,8 @@ class DBManager:
 
         return results
 
+
+
     def search_tags(self, query: str) -> List[Dict]:
         """
         Search tags by name
