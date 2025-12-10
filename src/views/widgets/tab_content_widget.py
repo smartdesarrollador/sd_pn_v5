@@ -15,6 +15,8 @@ from PyQt6.QtCore import pyqtSignal, Qt
 from src.views.widgets.context_selector_section import ContextSelectorSection
 from src.views.widgets.project_element_tags_section import ProjectElementTagsSection
 from src.views.widgets.item_fields_section import ItemFieldsSection
+from src.views.widgets.category_selector_section import CategorySelectorSection
+from src.views.widgets.special_tag_section import SpecialTagSection
 from src.views.widgets.item_tags_section import ItemTagsSection
 from src.models.item_draft import ItemDraft
 import logging
@@ -100,7 +102,7 @@ class TabContentWidget(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        # 1. Sección de Contexto (Proyecto, Área, Categoría, Lista)
+        # 1. Sección de Contexto (Proyecto, Área, Checkbox Lista)
         self.context_section = ContextSelectorSection()
         content_layout.addWidget(self.context_section)
 
@@ -114,14 +116,28 @@ class TabContentWidget(QWidget):
         # Separador
         self._add_separator(content_layout)
 
-        # 3. Sección de Items
+        # 3. Sección de Items (sin scroll interno)
         self.items_section = ItemFieldsSection()
         content_layout.addWidget(self.items_section)
 
         # Separador
         self._add_separator(content_layout)
 
-        # 4. Sección de Tags de Items
+        # 4. NUEVO: Categoría (movida aquí)
+        self.category_section = CategorySelectorSection()
+        content_layout.addWidget(self.category_section)
+
+        # Separador
+        self._add_separator(content_layout)
+
+        # 5. NUEVO: Tag Especial
+        self.special_tag_section = SpecialTagSection()
+        content_layout.addWidget(self.special_tag_section)
+
+        # Separador
+        self._add_separator(content_layout)
+
+        # 6. Tags de Items (opcionales)
         self.item_tags_section = ItemTagsSection()
         content_layout.addWidget(self.item_tags_section)
 
@@ -143,14 +159,19 @@ class TabContentWidget(QWidget):
         # Context section
         self.context_section.project_changed.connect(self._on_project_changed)
         self.context_section.area_changed.connect(self._on_area_changed)
-        self.context_section.category_changed.connect(self._on_data_changed)
-        self.context_section.create_as_list_changed.connect(self._on_data_changed)
+        self.context_section.create_as_list_changed.connect(self._on_create_as_list_changed)
         self.context_section.list_name_changed.connect(self._on_data_changed)
 
         # Botones de creación (context)
         self.context_section.create_project_clicked.connect(self.create_project_clicked.emit)
         self.context_section.create_area_clicked.connect(self.create_area_clicked.emit)
-        self.context_section.create_category_clicked.connect(self.create_category_clicked.emit)
+
+        # Category section (NUEVO)
+        self.category_section.category_changed.connect(self._on_data_changed)
+        self.category_section.create_category_clicked.connect(self.create_category_clicked.emit)
+
+        # Special tag section (NUEVO)
+        self.special_tag_section.tag_changed.connect(self._on_data_changed)
 
         # Project tags section
         self.project_tags_section.tags_changed.connect(self._on_data_changed)
@@ -218,6 +239,18 @@ class TabContentWidget(QWidget):
 
         self._on_data_changed()
 
+    def _on_create_as_list_changed(self, is_list: bool):
+        """Callback cuando cambia el checkbox de lista"""
+        # Habilitar/deshabilitar tag especial según checkbox
+        self.special_tag_section.set_enabled(not is_list)
+
+        # Si se marca lista, limpiar tag especial
+        if is_list:
+            self.special_tag_section.clear()
+
+        self._on_data_changed()
+        logger.debug(f"Crear como lista: {is_list} - Tag especial {'deshabilitado' if is_list else 'habilitado'}")
+
     def _on_item_changed(self, index: int, value: str):
         """Callback cuando cambia un item individual"""
         self._on_data_changed()
@@ -239,9 +272,11 @@ class TabContentWidget(QWidget):
         # Cargar contexto
         self.context_section.set_project_id(draft.project_id)
         self.context_section.set_area_id(draft.area_id)
-        self.context_section.set_category_id(draft.category_id)
         self.context_section.set_create_as_list(draft.create_as_list)
         self.context_section.set_list_name(draft.list_name or '')
+
+        # Cargar categoría (NUEVO)
+        self.category_section.set_category_id(draft.category_id)
 
         # Cargar tags de proyecto/área
         if draft.project_element_tags:
@@ -250,6 +285,10 @@ class TabContentWidget(QWidget):
         # Cargar items
         items_data = [item.to_dict() for item in draft.items]
         self.items_section.set_items_data(items_data)
+
+        # Cargar tag especial (NUEVO)
+        if hasattr(draft, 'special_tag') and draft.special_tag:
+            self.special_tag_section.set_tag(draft.special_tag)
 
         # Cargar tags de items
         if draft.item_tags:
@@ -270,10 +309,11 @@ class TabContentWidget(QWidget):
             tab_name=self.tab_name,
             project_id=self.context_section.get_project_id(),
             area_id=self.context_section.get_area_id(),
-            category_id=self.context_section.get_category_id(),
+            category_id=self.category_section.get_category_id(),  # NUEVO
             create_as_list=self.context_section.get_create_as_list(),
             list_name=self.context_section.get_list_name(),
             project_element_tags=self.project_tags_section.get_selected_tags(),
+            special_tag=self.special_tag_section.get_tag(),  # NUEVO
             item_tags=self.item_tags_section.get_selected_tags()
         )
 
@@ -292,25 +332,55 @@ class TabContentWidget(QWidget):
         """
         Valida todos los datos del tab
 
+        Validaciones:
+        1. Contexto (proyecto/área/lista)
+        2. Categoría (OBLIGATORIO)
+        3. Tags de proyecto (OBLIGATORIO si hay proyecto/área)
+        4. Tag especial (OBLIGATORIO si hay proyecto/área Y NO es lista)
+        5. Items (tipos válidos)
+        6. Al menos 1 item con contenido
+        7. Nombre de lista (si checkbox marcado)
+
         Returns:
             Tupla (is_valid, list of error_messages)
         """
         errors = []
 
-        # 1. Validar contexto
+        # 1. Validar contexto (proyecto/área/lista)
         valid_context, error_msg = self.context_section.validate()
         if not valid_context:
             errors.append(f"Contexto: {error_msg}")
 
-        # 2. Validar items
+        # 2. Validar categoría (OBLIGATORIO)
+        valid_category, category_error = self.category_section.validate()
+        if not valid_category:
+            errors.append(f"Categoría: {category_error}")
+
+        # Obtener estado para validaciones condicionales
+        has_project_or_area = self.context_section.has_project_or_area()
+        is_list = self.context_section.get_create_as_list()
+
+        # 3. Validar tags de proyecto (OBLIGATORIO si hay proyecto/área)
+        valid_project_tags, project_tags_error = self.project_tags_section.validate(has_project_or_area)
+        if not valid_project_tags:
+            errors.append(f"Tags de Proyecto: {project_tags_error}")
+
+        # 4. Validar tag especial (OBLIGATORIO si hay proyecto/área Y NO es lista)
+        valid_special_tag, special_tag_error = self.special_tag_section.validate(has_project_or_area, is_list)
+        if not valid_special_tag:
+            errors.append(f"Tag Especial: {special_tag_error}")
+
+        # 5. Validar items (tipos válidos)
         valid_items, item_errors = self.items_section.validate_all()
         if not valid_items:
             for index, error_msg in item_errors:
                 errors.append(f"Item {index + 1}: {error_msg}")
 
-        # 3. Verificar que haya al menos 1 item
+        # 6. Verificar que haya al menos 1 item con contenido
         if self.items_section.get_items_count() == 0:
             errors.append("Debe haber al menos 1 item con contenido")
+
+        # 7. Nombre de lista (validado en context_section.validate())
 
         is_valid = len(errors) == 0
 
@@ -318,14 +388,18 @@ class TabContentWidget(QWidget):
             logger.info(f"Validación exitosa en tab {self.tab_id}")
         else:
             logger.warning(f"Validación fallida en tab {self.tab_id}: {len(errors)} errores")
+            for error in errors:
+                logger.debug(f"  - {error}")
 
         return is_valid, errors
 
     def clear_all(self):
         """Limpia todos los campos del tab"""
         self.context_section.clear()
+        self.category_section.clear()  # NUEVO
         self.project_tags_section.clear_selection()
         self.items_section.clear_all_items()
+        self.special_tag_section.clear()  # NUEVO
         self.item_tags_section.clear_selection()
         logger.debug(f"Tab {self.tab_id} limpiado")
 
@@ -361,7 +435,7 @@ class TabContentWidget(QWidget):
 
     def load_available_categories(self, categories: list[tuple[int, str]]):
         """Carga categorías disponibles en el selector"""
-        self.context_section.load_categories(categories)
+        self.category_section.load_categories(categories)
 
     def load_available_project_tags(self, tags: list[str]):
         """Carga tags de proyecto/área disponibles"""

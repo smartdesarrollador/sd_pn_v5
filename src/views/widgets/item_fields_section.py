@@ -2,15 +2,17 @@
 Widget de sección de campos de items para el Creador Masivo
 
 Componentes:
-- Contenedor scrollable de ItemFieldWidget
+- Contenedor de ItemFieldWidget (sin scroll interno)
 - Botón + para agregar nuevos items
 - Gestión dinámica de items (mínimo 1)
 - Validación de todos los items
+
+NOTA: El scroll es manejado por el contenedor padre (TabContentWidget)
 """
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea
+    QFrame
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
@@ -82,39 +84,11 @@ class ItemFieldsSection(QWidget):
         separator.setStyleSheet("background-color: #444;")
         layout.addWidget(separator)
 
-        # Área scrollable para items
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: transparent;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background-color: #2d2d2d;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #555;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #666;
-            }
-        """)
-
-        # Widget contenedor de items
-        self.items_container = QWidget()
-        self.items_layout = QVBoxLayout(self.items_container)
-        self.items_layout.setContentsMargins(0, 0, 10, 0)  # Margen derecho para scrollbar
+        # Layout directo para items (sin scroll)
+        self.items_layout = QVBoxLayout()
+        self.items_layout.setContentsMargins(0, 0, 0, 0)
         self.items_layout.setSpacing(10)
-        self.items_layout.addStretch()  # Push items to top
-
-        scroll_area.setWidget(self.items_container)
-        layout.addWidget(scroll_area)
+        layout.addLayout(self.items_layout)
 
     def _apply_styles(self):
         """Aplica estilos CSS al widget"""
@@ -166,9 +140,9 @@ class ItemFieldsSection(QWidget):
             lambda widget=item_widget: self.remove_item_field(widget)
         )
 
-        # Agregar a lista y layout (antes del stretch)
+        # Agregar a lista y layout
         self.item_widgets.append(item_widget)
-        self.items_layout.insertWidget(self.items_layout.count() - 1, item_widget)
+        self.items_layout.addWidget(item_widget)
 
         # Actualizar contador
         self._update_count()

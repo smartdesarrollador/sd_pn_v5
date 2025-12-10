@@ -372,6 +372,30 @@ class ProjectElementTagsSection(QWidget):
         """
         self.set_selected_tags(tag_names)
 
+    def validate(self, project_or_area_selected: bool) -> tuple[bool, str]:
+        """
+        Valida que se haya seleccionado al menos un tag
+
+        Args:
+            project_or_area_selected: Si hay proyecto o área seleccionado
+
+        Returns:
+            Tupla (is_valid, error_message)
+        """
+        # Solo es obligatorio si hay proyecto/área seleccionado
+        if not project_or_area_selected:
+            return True, ""
+
+        selected_tags = self.get_selected_tags()
+        if len(selected_tags) == 0:
+            return False, "Debe seleccionar al menos 1 tag de proyecto/área"
+
+        return True, ""
+
+    def get_has_selection(self) -> bool:
+        """Verifica si hay al menos un tag seleccionado"""
+        return len(self.get_selected_tags()) > 0
+
     def __repr__(self) -> str:
         """Representación del widget"""
         selected = self.get_selected_tags()

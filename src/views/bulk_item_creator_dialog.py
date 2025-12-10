@@ -686,24 +686,74 @@ class BulkItemCreatorDialog(QWidget):
 
     def _save_items_from_draft(self, draft: ItemDraft) -> int:
         """
-        Guarda los items de un draft en la BD
+        Guarda los items de un draft en la BD usando 3 estrategias
+
+        Estrategias de guardado:
+        1. MODO SIMPLE: Sin proyecto/área
+           → Guarda items con tags opcionales
+
+        2. MODO LISTA: Con proyecto/área + checkbox "Crear como lista"
+           → Crea lista → guarda items con list_id → crea relación proyecto-lista
+
+        3. MODO TAG ESPECIAL: Con proyecto/área + tag especial (sin lista)
+           → Guarda items con tag especial → crea relación proyecto-tag
 
         Args:
-            draft: Borrador con los items
+            draft: Borrador con los items y metadatos
+
+        Returns:
+            Cantidad de items guardados
+
+        Raises:
+            Exception: Si hay error en el guardado
+        """
+        # Determinar estrategia de guardado
+        has_project_or_area = draft.has_project_or_area()
+        is_list = draft.create_as_list
+
+        logger.info("=" * 60)
+        logger.info("GUARDANDO ITEMS DESDE DRAFT")
+        logger.info(f"  Proyecto: {draft.project_id}")
+        logger.info(f"  Área: {draft.area_id}")
+        logger.info(f"  Es lista: {is_list}")
+        logger.info(f"  Tag especial: '{draft.special_tag}'")
+        logger.info(f"  Items: {len(draft.items)}")
+        logger.info(f"  Tags proyecto: {draft.project_element_tags}")
+        logger.info(f"  Tags items: {draft.item_tags}")
+        logger.info("=" * 60)
+
+        # ESTRATEGIA 1: Modo Simple (sin proyecto/área)
+        if not has_project_or_area:
+            logger.info("→ Estrategia: MODO SIMPLE")
+            return self._save_simple_items(draft)
+
+        # ESTRATEGIA 2: Modo Lista (con proyecto/área + checkbox)
+        if is_list:
+            logger.info("→ Estrategia: MODO LISTA")
+            return self._save_as_list(draft)
+
+        # ESTRATEGIA 3: Modo Tag Especial (con proyecto/área, sin lista)
+        logger.info("→ Estrategia: MODO TAG ESPECIAL")
+        return self._save_with_special_tag(draft)
+
+    def _save_simple_items(self, draft: ItemDraft) -> int:
+        """
+        Guarda items sin proyecto/área (modo simple)
+
+        Este método se usa cuando NO hay proyecto ni área seleccionados.
+        Solo guarda los items con sus tags opcionales.
+
+        Args:
+            draft: Borrador con items y tags
 
         Returns:
             Cantidad de items guardados
         """
         saved_count = 0
 
-        # Si es lista, crear la lista primero
-        list_id = None
-        if draft.create_as_list and draft.list_name:
-            # TODO: Implementar creación de lista
-            # list_id = self.db.create_list(draft.list_name, draft.category_id)
-            pass
+        logger.info(f"Guardando {len(draft.items)} items en modo SIMPLE (sin proyecto/área)")
 
-        # Guardar cada item
+        # Guardar cada item con sus tags
         for item_field in draft.items:
             if item_field.is_empty():
                 continue
@@ -714,33 +764,344 @@ class BulkItemCreatorDialog(QWidget):
                     label=item_field.content,
                     content=item_field.content,
                     item_type=item_field.item_type,
-                    tags=draft.item_tags,
-                    # list_id=list_id,  # TODO: Cuando se implemente listas
+                    tags=draft.item_tags  # Solo tags de items (opcionales)
                 )
 
                 if item_id:
                     saved_count += 1
-                    logger.debug(f"Item guardado: {item_field.content[:30]}...")
+                    logger.debug(f"Item guardado (simple): {item_field.content[:30]}...")
 
             except Exception as e:
-                logger.error(f"Error guardando item: {e}")
+                logger.error(f"Error guardando item simple: {e}")
+
+        logger.info(f"✓ Modo SIMPLE: {saved_count} items guardados")
+        return saved_count
+
+    def _save_with_special_tag(self, draft: ItemDraft) -> int:
+        """
+        Guarda items con tag especial vinculado a proyecto/área
+
+        Este método se usa cuando hay proyecto/área Y NO es lista.
+        Flujo:
+        1. Obtener/crear el tag especial en BD
+        2. Crear items con tag especial + tags opcionales
+        3. Crear relación proyecto-tag (project_relations)
+        4. Asociar tags de proyecto a la relación
+
+        Args:
+            draft: Borrador con items, special_tag y project_element_tags
+
+        Returns:
+            Cantidad de items guardados
+        """
+        saved_count = 0
+
+        # Determinar si es proyecto o área
+        is_project = draft.project_id is not None
+        entity_id = draft.project_id if is_project else draft.area_id
+        entity_name = "Proyecto" if is_project else "Área"
+
+        logger.info(f"Guardando items con TAG ESPECIAL: '{draft.special_tag}' → {entity_name} #{entity_id}")
+
+        try:
+            # Paso 1: Obtener/crear tag especial
+            tag_especial_id = self.db.get_or_create_tag(draft.special_tag)
+            logger.debug(f"Tag especial ID: {tag_especial_id}")
+
+            # Paso 2: Combinar tags (especial + opcionales)
+            all_tags = [draft.special_tag] + draft.item_tags
+
+            # Paso 3: Guardar cada item con todos los tags
+            for item_field in draft.items:
+                if item_field.is_empty():
+                    continue
+
+                try:
+                    item_id = self.db.add_item(
+                        category_id=draft.category_id,
+                        label=item_field.content,
+                        content=item_field.content,
+                        item_type=item_field.item_type,
+                        tags=all_tags
+                    )
+
+                    if item_id:
+                        saved_count += 1
+                        logger.debug(f"Item guardado (tag especial): {item_field.content[:30]}...")
+
+                except Exception as e:
+                    logger.error(f"Error guardando item con tag especial: {e}")
+
+            # Paso 4: Crear relación proyecto/área → tag especial
+            if is_project:
+                relation_id = self.db.add_project_relation(
+                    project_id=draft.project_id,
+                    entity_type='tag',
+                    entity_id=tag_especial_id,
+                    description=f"Tag principal: {draft.special_tag}"
+                )
+                logger.debug(f"Relación proyecto creada: relation_id={relation_id}")
+            else:
+                relation_id = self.db.add_area_relation(
+                    area_id=draft.area_id,
+                    entity_type='tag',
+                    entity_id=tag_especial_id,
+                    description=f"Tag principal: {draft.special_tag}"
+                )
+                logger.debug(f"Relación área creada: relation_id={relation_id}")
+
+            # Paso 5: Asociar tags de proyecto/área a la relación
+            for project_tag_name in draft.project_element_tags:
+                project_tag_id = self.db.get_or_create_tag(project_tag_name)
+
+                if is_project:
+                    self.db.add_tag_to_project_relation(relation_id, project_tag_id)
+                else:
+                    self.db.assign_tag_to_area_relation(relation_id, project_tag_id)
+
+                logger.debug(f"Tag '{project_tag_name}' asociado a relación")
+
+            logger.info(f"✓ Modo TAG ESPECIAL: {saved_count} items + relación {entity_name.lower()}")
+
+        except Exception as e:
+            logger.error(f"Error en guardado con tag especial: {e}")
+            raise
+
+        return saved_count
+
+    def _save_as_list(self, draft: ItemDraft) -> int:
+        """
+        Guarda items como lista vinculada a proyecto/área
+
+        Este método se usa cuando el checkbox "Crear como lista" está marcado.
+        Flujo:
+        1. Crear lista en BD
+        2. Crear items vinculados a la lista (con list_id)
+        3. Crear relación proyecto-lista (project_relations)
+        4. Asociar tags de proyecto a la relación
+
+        Args:
+            draft: Borrador con items, list_name y project_element_tags
+
+        Returns:
+            Cantidad de items guardados
+        """
+        saved_count = 0
+
+        # Determinar si es proyecto o área
+        is_project = draft.project_id is not None
+        entity_id = draft.project_id if is_project else draft.area_id
+        entity_name = "Proyecto" if is_project else "Área"
+
+        logger.info(f"Guardando LISTA: '{draft.list_name}' → {entity_name} #{entity_id}")
+
+        try:
+            # Paso 1: Crear lista
+            lista_id = self.db.create_lista(
+                category_id=draft.category_id,
+                name=draft.list_name,
+                description=f"Lista creada desde {entity_name} #{entity_id}"
+            )
+            logger.debug(f"Lista creada: lista_id={lista_id}")
+
+            # Paso 2: Guardar items con list_id
+            for item_field in draft.items:
+                if item_field.is_empty():
+                    continue
+
+                try:
+                    item_id = self.db.add_item(
+                        category_id=draft.category_id,
+                        label=item_field.content,
+                        content=item_field.content,
+                        item_type=item_field.item_type,
+                        list_id=lista_id,
+                        tags=draft.item_tags  # Tags opcionales (sin tag especial)
+                    )
+
+                    if item_id:
+                        saved_count += 1
+                        logger.debug(f"Item guardado (lista): {item_field.content[:30]}...")
+
+                except Exception as e:
+                    logger.error(f"Error guardando item de lista: {e}")
+
+            # Paso 3: Crear relación proyecto/área → lista
+            if is_project:
+                relation_id = self.db.add_project_relation(
+                    project_id=draft.project_id,
+                    entity_type='list',
+                    entity_id=lista_id,
+                    description=f"Lista: {draft.list_name}"
+                )
+                logger.debug(f"Relación proyecto-lista creada: relation_id={relation_id}")
+            else:
+                relation_id = self.db.add_area_relation(
+                    area_id=draft.area_id,
+                    entity_type='list',
+                    entity_id=lista_id,
+                    description=f"Lista: {draft.list_name}"
+                )
+                logger.debug(f"Relación área-lista creada: relation_id={relation_id}")
+
+            # Paso 4: Asociar tags de proyecto/área a la relación
+            for project_tag_name in draft.project_element_tags:
+                project_tag_id = self.db.get_or_create_tag(project_tag_name)
+
+                if is_project:
+                    self.db.add_tag_to_project_relation(relation_id, project_tag_id)
+                else:
+                    self.db.assign_tag_to_area_relation(relation_id, project_tag_id)
+
+                logger.debug(f"Tag '{project_tag_name}' asociado a lista")
+
+            logger.info(f"✓ Modo LISTA: {saved_count} items + relación {entity_name.lower()}")
+
+        except Exception as e:
+            logger.error(f"Error en guardado como lista: {e}")
+            raise
 
         return saved_count
 
     def _on_create_project(self):
         """Callback para crear nuevo proyecto"""
-        # TODO: Implementar diálogo de creación de proyecto
-        QMessageBox.information(self, "TODO", "Crear proyecto - Por implementar")
+        # Diálogo simple para nombre
+        name, ok = QInputDialog.getText(
+            self,
+            "Crear Proyecto",
+            "Nombre del proyecto:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            logger.info("Creación de proyecto cancelada")
+            return
+
+        try:
+            # Crear proyecto en BD
+            project_id = self.db.add_project(name=name.strip())
+
+            if not project_id:
+                QMessageBox.critical(self, "Error", "No se pudo crear el proyecto")
+                return
+
+            logger.info(f"Proyecto creado: {name} (ID: {project_id})")
+
+            # Actualizar todos los tabs con el nuevo proyecto
+            self._reload_projects_in_all_tabs()
+
+            # Seleccionar el proyecto recién creado en el tab actual
+            current_tab = self._get_current_tab_content()
+            if current_tab:
+                current_tab.context_section.set_project_id(project_id)
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Proyecto '{name}' creado correctamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error creando proyecto: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al crear proyecto:\n{str(e)}"
+            )
 
     def _on_create_area(self):
         """Callback para crear nueva área"""
-        # TODO: Implementar diálogo de creación de área
-        QMessageBox.information(self, "TODO", "Crear área - Por implementar")
+        name, ok = QInputDialog.getText(
+            self,
+            "Crear Área",
+            "Nombre del área:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            logger.info("Creación de área cancelada")
+            return
+
+        try:
+            # Crear área en BD
+            area_id = self.db.add_area(name=name.strip())
+
+            if not area_id:
+                QMessageBox.critical(self, "Error", "No se pudo crear el área")
+                return
+
+            logger.info(f"Área creada: {name} (ID: {area_id})")
+
+            # Actualizar todos los tabs
+            self._reload_areas_in_all_tabs()
+
+            # Seleccionar área recién creada
+            current_tab = self._get_current_tab_content()
+            if current_tab:
+                current_tab.context_section.set_area_id(area_id)
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Área '{name}' creada correctamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error creando área: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al crear área:\n{str(e)}"
+            )
 
     def _on_create_category(self):
         """Callback para crear nueva categoría"""
-        # TODO: Implementar diálogo de creación de categoría
-        QMessageBox.information(self, "TODO", "Crear categoría - Por implementar")
+        name, ok = QInputDialog.getText(
+            self,
+            "Crear Categoría",
+            "Nombre de la categoría:",
+            text=""
+        )
+
+        if not ok or not name.strip():
+            logger.info("Creación de categoría cancelada")
+            return
+
+        try:
+            # Crear categoría en BD
+            category_id = self.db.add_category(
+                name=name.strip(),
+                icon="📁",  # Icono por defecto
+                is_predefined=False
+            )
+
+            if not category_id:
+                QMessageBox.critical(self, "Error", "No se pudo crear la categoría")
+                return
+
+            logger.info(f"Categoría creada: {name} (ID: {category_id})")
+
+            # Actualizar todos los tabs
+            self._reload_categories_in_all_tabs()
+
+            # Seleccionar categoría recién creada
+            current_tab = self._get_current_tab_content()
+            if current_tab:
+                current_tab.category_section.set_category_id(category_id)
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Categoría '{name}' creada correctamente."
+            )
+
+        except Exception as e:
+            logger.error(f"Error creando categoría: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al crear categoría:\n{str(e)}"
+            )
 
     def _on_create_project_tag(self):
         """Callback para crear nuevo tag de proyecto/área"""
@@ -755,6 +1116,64 @@ class BulkItemCreatorDialog(QWidget):
     def _on_close_clicked(self):
         """Callback del botón cerrar del header"""
         self.hide()
+
+    # === MÉTODOS AUXILIARES ===
+
+    def _get_current_tab_content(self) -> TabContentWidget | None:
+        """Obtiene el TabContentWidget del tab actual"""
+        index = self.tab_widget.currentIndex()
+        if index < 0:
+            return None
+
+        widget = self.tab_widget.widget(index)
+        if isinstance(widget, TabContentWidget):
+            return widget
+        return None
+
+    def _reload_projects_in_all_tabs(self):
+        """Recarga lista de proyectos en todos los tabs"""
+        try:
+            projects = self.db.get_all_projects() if hasattr(self.db, 'get_all_projects') else []
+            projects_data = [(p['id'], p['name']) for p in projects]
+
+            for i in range(self.tab_widget.count()):
+                tab_content = self.tab_widget.widget(i)
+                if isinstance(tab_content, TabContentWidget):
+                    tab_content.load_available_projects(projects_data)
+
+            logger.debug(f"Proyectos recargados en {self.tab_widget.count()} tabs")
+        except Exception as e:
+            logger.error(f"Error recargando proyectos: {e}")
+
+    def _reload_areas_in_all_tabs(self):
+        """Recarga lista de áreas en todos los tabs"""
+        try:
+            areas = self.db.get_all_areas() if hasattr(self.db, 'get_all_areas') else []
+            areas_data = [(a['id'], a['name']) for a in areas]
+
+            for i in range(self.tab_widget.count()):
+                tab_content = self.tab_widget.widget(i)
+                if isinstance(tab_content, TabContentWidget):
+                    tab_content.load_available_areas(areas_data)
+
+            logger.debug(f"Áreas recargadas en {self.tab_widget.count()} tabs")
+        except Exception as e:
+            logger.error(f"Error recargando áreas: {e}")
+
+    def _reload_categories_in_all_tabs(self):
+        """Recarga lista de categorías en todos los tabs"""
+        try:
+            categories = self.config.get_categories()
+            categories_data = [(c.id, c.name) for c in categories]
+
+            for i in range(self.tab_widget.count()):
+                tab_content = self.tab_widget.widget(i)
+                if isinstance(tab_content, TabContentWidget):
+                    tab_content.load_available_categories(categories_data)
+
+            logger.debug(f"Categorías recargadas en {self.tab_widget.count()} tabs")
+        except Exception as e:
+            logger.error(f"Error recargando categorías: {e}")
 
     # === DRAGGING ===
 

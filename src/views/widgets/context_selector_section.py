@@ -4,8 +4,9 @@ Widget de selección de contexto para el Creador Masivo
 Componentes:
 - Selector de Proyecto con botón +
 - Selector de Área con botón +
-- Selector de Categoría con botón + (OBLIGATORIO)
 - Checkbox "Crear como lista" con campo de nombre
+
+NOTA: El selector de Categoría fue movido a CategorySelectorSection
 """
 
 from PyQt6.QtWidgets import (
@@ -216,28 +217,24 @@ class ContextSelectorSection(QWidget):
     """
     Sección de selección de contexto para el Creador Masivo
 
-    Incluye selectores de proyecto, área, categoría y checkbox de lista.
+    Incluye selectores de proyecto, área y checkbox de lista.
 
     Señales:
         project_changed: Emitida cuando cambia el proyecto (int or None)
         area_changed: Emitida cuando cambia el área (int or None)
-        category_changed: Emitida cuando cambia la categoría (int or None)
         create_as_list_changed: Emitida cuando cambia el checkbox (bool)
         list_name_changed: Emitida cuando cambia el nombre de lista (str)
         create_project_clicked: Emitida cuando se hace clic en crear proyecto
         create_area_clicked: Emitida cuando se hace clic en crear área
-        create_category_clicked: Emitida cuando se hace clic en crear categoría
     """
 
     # Señales
     project_changed = pyqtSignal(object)  # int or None
     area_changed = pyqtSignal(object)  # int or None
-    category_changed = pyqtSignal(object)  # int or None
     create_as_list_changed = pyqtSignal(bool)
     list_name_changed = pyqtSignal(str)
     create_project_clicked = pyqtSignal()
     create_area_clicked = pyqtSignal()
-    create_category_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         """Inicializa la sección de contexto"""
@@ -276,14 +273,6 @@ class ContextSelectorSection(QWidget):
             placeholder="Seleccionar área..."
         )
         layout.addWidget(self.area_selector)
-
-        # Selector de Categoría (OBLIGATORIO)
-        self.category_selector = SelectorWithCreate(
-            label_text="Categoría",
-            is_required=True,
-            placeholder="Seleccionar categoría..."
-        )
-        layout.addWidget(self.category_selector)
 
         # Checkbox "Crear como lista"
         self.list_checkbox = QCheckBox("Crear como lista")
@@ -361,12 +350,10 @@ class ContextSelectorSection(QWidget):
         # Selectores
         self.project_selector.selection_changed.connect(self.project_changed.emit)
         self.area_selector.selection_changed.connect(self.area_changed.emit)
-        self.category_selector.selection_changed.connect(self.category_changed.emit)
 
         # Botones crear
         self.project_selector.create_clicked.connect(self.create_project_clicked.emit)
         self.area_selector.create_clicked.connect(self.create_area_clicked.emit)
-        self.category_selector.create_clicked.connect(self.create_category_clicked.emit)
 
         # Lista
         self.list_checkbox.stateChanged.connect(self._on_list_checkbox_changed)
@@ -403,15 +390,6 @@ class ContextSelectorSection(QWidget):
         """
         self.area_selector.load_items(areas)
 
-    def load_categories(self, categories: list[tuple[int, str]]):
-        """
-        Carga categorías en el selector
-
-        Args:
-            categories: Lista de tuplas (id, name)
-        """
-        self.category_selector.load_items(categories, include_empty=False)
-
     def get_project_id(self) -> int | None:
         """Obtiene el ID del proyecto seleccionado"""
         return self.project_selector.get_selected_id()
@@ -419,10 +397,6 @@ class ContextSelectorSection(QWidget):
     def get_area_id(self) -> int | None:
         """Obtiene el ID del área seleccionada"""
         return self.area_selector.get_selected_id()
-
-    def get_category_id(self) -> int | None:
-        """Obtiene el ID de la categoría seleccionada"""
-        return self.category_selector.get_selected_id()
 
     def get_create_as_list(self) -> bool:
         """Obtiene el estado del checkbox de lista"""
@@ -432,6 +406,15 @@ class ContextSelectorSection(QWidget):
         """Obtiene el nombre de la lista"""
         return self.list_name_input.text().strip()
 
+    def has_project_or_area(self) -> bool:
+        """
+        Verifica si hay proyecto o área seleccionado
+
+        Returns:
+            True si hay proyecto_id o area_id
+        """
+        return self.get_project_id() is not None or self.get_area_id() is not None
+
     def set_project_id(self, project_id: int | None):
         """Establece el proyecto seleccionado"""
         self.project_selector.set_selected_id(project_id)
@@ -439,10 +422,6 @@ class ContextSelectorSection(QWidget):
     def set_area_id(self, area_id: int | None):
         """Establece el área seleccionada"""
         self.area_selector.set_selected_id(area_id)
-
-    def set_category_id(self, category_id: int | None):
-        """Establece la categoría seleccionada"""
-        self.category_selector.set_selected_id(category_id)
 
     def set_create_as_list(self, checked: bool):
         """Establece el estado del checkbox de lista"""
@@ -465,7 +444,6 @@ class ContextSelectorSection(QWidget):
         return {
             'project_id': self.get_project_id(),
             'area_id': self.get_area_id(),
-            'category_id': self.get_category_id(),
             'create_as_list': self.get_create_as_list(),
             'list_name': self.get_list_name()
         }
@@ -479,7 +457,6 @@ class ContextSelectorSection(QWidget):
         """
         self.set_project_id(data.get('project_id'))
         self.set_area_id(data.get('area_id'))
-        self.set_category_id(data.get('category_id'))
         self.set_create_as_list(data.get('create_as_list', False))
         self.set_list_name(data.get('list_name', ''))
 
@@ -490,10 +467,6 @@ class ContextSelectorSection(QWidget):
         Returns:
             Tupla (is_valid, error_message)
         """
-        # Categoría es obligatoria
-        if self.get_category_id() is None:
-            return False, "Debe seleccionar una categoría"
-
         # Si está marcado crear como lista, necesita nombre
         if self.get_create_as_list():
             if not self.get_list_name():
@@ -505,12 +478,11 @@ class ContextSelectorSection(QWidget):
         """Limpia todos los campos"""
         self.project_selector.clear()
         self.area_selector.clear()
-        self.category_selector.clear()
         self.list_checkbox.setChecked(False)
         self.list_name_input.clear()
 
     def __repr__(self) -> str:
         """Representación del widget"""
         return (f"ContextSelectorSection(project={self.get_project_id()}, "
-                f"area={self.get_area_id()}, category={self.get_category_id()}, "
+                f"area={self.get_area_id()}, "
                 f"list={self.get_create_as_list()})")

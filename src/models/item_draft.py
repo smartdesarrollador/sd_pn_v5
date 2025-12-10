@@ -83,6 +83,7 @@ class ItemDraft:
         category_id: ID de la categoría (OBLIGATORIO para guardar)
         create_as_list: Flag para crear items como lista
         list_name: Nombre de la lista (si create_as_list=True)
+        special_tag: Tag especial que se relaciona con proyecto/área
         item_tags: Tags generales de items
         project_element_tags: Tags específicos del proyecto/área
         items: Lista de campos de items
@@ -96,6 +97,7 @@ class ItemDraft:
     category_id: Optional[int] = None
     create_as_list: bool = False
     list_name: Optional[str] = None
+    special_tag: str = ''  # Tag especial relacionado con proyecto/área
     item_tags: List[str] = field(default_factory=list)
     project_element_tags: List[str] = field(default_factory=list)
     items: List[ItemFieldData] = field(default_factory=list)
@@ -117,6 +119,7 @@ class ItemDraft:
             'category_id': self.category_id,
             'create_as_list': self.create_as_list,
             'list_name': self.list_name,
+            'special_tag': self.special_tag,  # NUEVO
             'item_tags': self.item_tags,
             'project_element_tags': self.project_element_tags,
             'items': [item.to_dict() for item in self.items]
@@ -145,6 +148,7 @@ class ItemDraft:
             category_id=data.get('category_id'),
             create_as_list=data.get('create_as_list', False),
             list_name=data.get('list_name'),
+            special_tag=data.get('special_tag', ''),  # NUEVO
             item_tags=data.get('item_tags', []),
             project_element_tags=data.get('project_element_tags', []),
             items=items,
