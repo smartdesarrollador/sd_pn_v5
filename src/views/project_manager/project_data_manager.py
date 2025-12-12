@@ -226,8 +226,18 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
             if not project:
                 return None
 
-            # 2. Obtener tags del proyecto (ordenados)
-            project_tags = self.db.get_tags_for_project(project_id)
+            # 2. Obtener TODOS los tags que tienen elementos asociados al proyecto
+            # (no solo los de project_tag_orders, sino todos los que tienen relaciones)
+            conn = self.db.connect()
+            cursor = conn.execute("""
+                SELECT DISTINCT pet.id, pet.name, pet.color
+                FROM project_element_tag_associations ta
+                JOIN project_element_tags pet ON ta.tag_id = pet.id
+                JOIN project_relations pr ON ta.project_relation_id = pr.id
+                WHERE pr.project_id = ?
+                ORDER BY pet.name ASC
+            """, (project_id,))
+            project_tags = [dict(row) for row in cursor.fetchall()]
 
             # 3. Construir estructura de tags con sus grupos
             tags_data = []
@@ -298,6 +308,52 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
                             'items': self._format_items(items)
                         })
 
+                # Procesar tablas
+                table_relations = [r for r in tag_relations if r['entity_type'] == 'table']
+                for rel in table_relations:
+                    table_id = rel['entity_id']
+                    # Obtener items de la tabla
+                    items = self.db.get_items_by_table(table_id)
+
+                    if items:  # Solo agregar si tiene items
+                        # Obtener nombre de tabla
+                        table_name = self._get_table_name(table_id)
+
+                        groups_data.append({
+                            'type': 'table',
+                            'name': table_name,
+                            'items': self._format_items(items)
+                        })
+
+                # Procesar items individuales
+                item_relations = [r for r in tag_relations if r['entity_type'] == 'item']
+                for rel in item_relations:
+                    item_id = rel['entity_id']
+                    # Obtener el item individual
+                    item = self.db.get_item(item_id)
+
+                    if item:  # Solo agregar si existe
+                        groups_data.append({
+                            'type': 'item',
+                            'name': item.get('label', 'Item sin nombre'),
+                            'items': self._format_items([item])
+                        })
+
+                # Procesar procesos (sin items, solo mostrar el proceso)
+                process_relations = [r for r in tag_relations if r['entity_type'] == 'process']
+                for rel in process_relations:
+                    process_id = rel['entity_id']
+                    # Obtener el proceso
+                    process = self.db.get_process(process_id)
+
+                    if process:  # Solo agregar si existe
+                        # Los procesos no tienen items, solo mostrarlos como info
+                        groups_data.append({
+                            'type': 'process',
+                            'name': process.get('name', 'Proceso sin nombre'),
+                            'items': []  # Los procesos no tienen items
+                        })
+
                 # Solo agregar el tag si tiene grupos con items
                 if groups_data:
                     tags_data.append({
@@ -306,15 +362,19 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
                         'groups': groups_data
                     })
 
-            # 4. Obtener items sin agrupar (items del proyecto que no están bajo ningún tag)
-            ungrouped_items = self._get_ungrouped_items(project_id, tags_data)
+            # 4. Obtener elementos sin tag de proyecto (elementos "Sin clasificar")
+            unclassified_items = self._get_unclassified_elements(project_id)
 
-            # 5. Construir y retornar estructura final
+            # 5. Obtener items sin agrupar (items que no están en ningún elemento)
+            ungrouped_items = self._get_ungrouped_items(project_id, tags_data, unclassified_items)
+
+            # 6. Construir y retornar estructura final
             return {
                 'project_id': project_id,
                 'project_name': project.get('name', 'Proyecto sin nombre'),
                 'project_icon': project.get('icon', '📁'),
                 'tags': tags_data,
+                'unclassified_elements': unclassified_items,
                 'ungrouped_items': ungrouped_items
             }
 
@@ -382,6 +442,24 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
         except:
             return f'Tag {tag_id}'
 
+    def _get_table_name(self, table_id: int) -> str:
+        """
+        Obtiene el nombre de una tabla
+
+        Args:
+            table_id: ID de la tabla
+
+        Returns:
+            Nombre de la tabla
+        """
+        try:
+            conn = self.db.connect()
+            cursor = conn.execute("SELECT name FROM custom_tables WHERE id = ?", (table_id,))
+            row = cursor.fetchone()
+            return row['name'] if row else f'Tabla {table_id}'
+        except:
+            return f'Tabla {table_id}'
+
     def _format_items(self, items: List[Dict]) -> List[Dict]:
         """
         Formatea items para la vista completa
@@ -405,7 +483,78 @@ Python fue creado por Guido van Rossum y lanzado por primera vez en 1991. El nom
 
         return formatted_items
 
-    def _get_ungrouped_items(self, project_id: int, tags_data: List[Dict]) -> List[Dict]:
+    def _get_unclassified_elements(self, project_id: int) -> List[Dict]:
+        """
+        Obtiene elementos del proyecto que NO tienen tag de proyecto asociado
+
+        Args:
+            project_id: ID del proyecto
+
+        Returns:
+            Lista de elementos sin clasificar con sus items
+        """
+        try:
+            conn = self.db.connect()
+
+            # Obtener relaciones sin tag de proyecto
+            cursor = conn.execute("""
+                SELECT pr.*
+                FROM project_relations pr
+                LEFT JOIN project_element_tag_associations ta ON pr.id = ta.project_relation_id
+                WHERE pr.project_id = ? AND ta.id IS NULL
+            """, (project_id,))
+
+            unclassified_relations = cursor.fetchall()
+
+            unclassified_elements = []
+
+            for rel in unclassified_relations:
+                rel_dict = dict(rel)
+                entity_type = rel_dict['entity_type']
+                entity_id = rel_dict['entity_id']
+
+                # Obtener nombre y items según el tipo
+                if entity_type == 'category':
+                    name = self._get_category_name(entity_id)
+                    items = self.db.get_items_by_category(entity_id)
+                elif entity_type == 'list':
+                    cursor2 = conn.execute("SELECT name FROM listas WHERE id = ?", (entity_id,))
+                    row = cursor2.fetchone()
+                    name = row['name'] if row else f'Lista {entity_id}'
+                    items = self.db.get_items_by_lista(entity_id)
+                elif entity_type == 'tag':
+                    name = self._get_item_tag_name(entity_id)
+                    items = self.db.get_items_by_tag_id(entity_id)
+                elif entity_type == 'table':
+                    name = self._get_table_name(entity_id)
+                    items = self.db.get_items_by_table(entity_id)
+                elif entity_type == 'item':
+                    item = self.db.get_item(entity_id)
+                    name = item.get('label', 'Item sin nombre') if item else f'Item {entity_id}'
+                    items = [item] if item else []
+                elif entity_type == 'process':
+                    process = self.db.get_process(entity_id)
+                    name = process.get('name', 'Proceso sin nombre') if process else f'Proceso {entity_id}'
+                    items = []  # Los procesos no tienen items
+                else:
+                    continue
+
+                if items or entity_type == 'process':  # Agregar si tiene items o es proceso
+                    unclassified_elements.append({
+                        'type': entity_type,
+                        'name': name,
+                        'items': self._format_items(items) if items else []
+                    })
+
+            return unclassified_elements
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo elementos sin clasificar: {e}")
+            return []
+
+    def _get_ungrouped_items(self, project_id: int, tags_data: List[Dict], unclassified_elements: List[Dict] = None) -> List[Dict]:
         """
         Obtiene items del proyecto que no están bajo ningún tag
 
