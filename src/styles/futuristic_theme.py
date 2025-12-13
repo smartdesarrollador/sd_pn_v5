@@ -79,7 +79,6 @@ class FuturisticTheme:
                     stop:0 {self.get_color('background_deep')},
                     stop:1 {self.get_color('background_mid')}
                 );
-                border-right: 2px solid {self.get_color('primary')};
                 border-image: none;
             }}
         """
