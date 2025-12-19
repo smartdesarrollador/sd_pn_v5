@@ -267,3 +267,145 @@ if session_mgr.validate_session():
 6. **Archivos temporales**: TODO en `util/`
 7. **Transacciones BD**: Usar context managers
 8. **Cifrado**: Transparente con `is_sensitive=True`
+
+---
+
+## ⚠️ CRÍTICO: Preparación para PyInstaller
+
+**Este proyecto está LISTO para generar ejecutable.** Para mantenerlo así, sigue estas reglas estrictamente:
+
+### Regla 1: SIEMPRE usar prefijo `src.` en imports
+
+**❌ NUNCA hacer esto:**
+```python
+from core.config_manager import ConfigManager
+from controllers.main_controller import MainController
+from models.item import Item
+from views.main_window import MainWindow
+from database.db_manager import DBManager
+from utils.validators import validate_email
+```
+
+**✅ SIEMPRE hacer esto:**
+```python
+from src.core.config_manager import ConfigManager
+from src.controllers.main_controller import MainController
+from src.models.item import Item
+from src.views.main_window import MainWindow
+from src.database.db_manager import DBManager
+from src.utils.validators import validate_email
+```
+
+**Por qué**: PyInstaller requiere imports explícitos con el prefijo del paquete raíz para detectar todos los módulos necesarios.
+
+### Regla 2: NO manipular sys.path
+
+**❌ NUNCA hacer esto:**
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent))
+```
+
+**✅ En su lugar:** Usar imports con prefijo `src.` (ver Regla 1)
+
+**Por qué**: Las manipulaciones de `sys.path` interfieren con el empaquetado de PyInstaller y crean problemas de resolución de módulos.
+
+### Regla 3: Mantener requirements.txt actualizado
+
+Si agregas una nueva dependencia, **SIEMPRE** actualiza `requirements.txt`:
+
+```bash
+# Después de hacer pip install nueva-libreria
+pip freeze | grep nueva-libreria >> requirements.txt
+```
+
+**Dependencias CRÍTICAS que deben estar:**
+- `bcrypt==4.0.1` - Autenticación
+- `pyinstaller==6.3.0` - Build del ejecutable
+- `mss==9.0.1` - Screenshots
+- `PyQt6==6.7.0` - Framework UI
+
+### Regla 4: NO modificar archivos de configuración de build
+
+**Archivos que NO deben modificarse sin verificación:**
+- `widget_sidebar.spec` - Configuración de PyInstaller
+- `build.bat` - Script de build
+- `util/pre_build_check.py` - Verificación pre-build
+- `util/fix_imports.py` - Corrección de imports
+
+### Regla 5: Verificar antes de commit
+
+Antes de hacer commit de archivos nuevos en `src/`, ejecuta:
+
+```bash
+# Verificar que todo está correcto
+python util/pre_build_check.py
+```
+
+**Salida esperada:**
+```
+Total de verificaciones: 10
+Exitosas: 10
+Fallidas: 0
+
+[EXITO] Proyecto listo para generar ejecutable!
+```
+
+### Regla 6: Corrección automática de imports
+
+Si accidentalmente creaste archivos con imports incorrectos:
+
+```bash
+# Corregir automáticamente todos los imports
+python util/fix_imports.py
+
+# Verificar que quedó bien
+python util/pre_build_check.py
+```
+
+### Script de Generación de Ejecutable
+
+Cuando necesites generar el ejecutable:
+
+```bash
+# Opción 1: Script automático (recomendado)
+build.bat
+
+# Opción 2: Comando directo
+.\venv\Scripts\pyinstaller.exe widget_sidebar.spec --clean --noconfirm
+
+# Ubicación del ejecutable generado:
+# dist\WidgetSidebar\WidgetSidebar.exe
+```
+
+### Problemas Comunes y Soluciones
+
+| Problema | Causa | Solución |
+|----------|-------|----------|
+| ModuleNotFoundError al ejecutar .exe | Imports sin prefijo `src.` | Ejecutar `python util/fix_imports.py` |
+| Falta módulo en ejecutable | No está en hiddenimports de .spec | Agregar a `widget_sidebar.spec` |
+| Error de PyQt6.QtNetwork | Binario no incluido | Ya está resuelto en .spec actual |
+| Build falla | Dependencia no instalada en venv | `.\venv\Scripts\python.exe -m pip install -r requirements.txt` |
+
+### Checklist de Nuevo Archivo Python
+
+Cuando crees un nuevo archivo `.py` en `src/`:
+
+- [ ] ✅ Todos los imports usan prefijo `src.`
+- [ ] ✅ NO hay líneas `sys.path.insert()` o `sys.path.append()`
+- [ ] ✅ Ejecutaste `python util/pre_build_check.py` y pasó
+- [ ] ✅ Si usa una nueva librería, actualizaste `requirements.txt`
+
+### Estado Actual del Proyecto
+
+**✅ VERIFICADO (19-Dic-2025):**
+- ✅ 392 imports corregidos con prefijo `src.`
+- ✅ requirements.txt completo (bcrypt, pyinstaller incluidos)
+- ✅ widget_sidebar.spec configurado correctamente
+- ✅ build.bat usando venv correctamente
+- ✅ Todas las verificaciones pasando (10/10)
+- ✅ Entorno virtual configurado con todas las dependencias
+
+**El proyecto está 100% listo para generar el ejecutable en cualquier momento.**
