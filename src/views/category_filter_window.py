@@ -86,7 +86,10 @@ class CategoryFilterWindow(QWidget):
         # Búsqueda primero (arriba)
         self._create_search_section(scroll_layout)
 
-        # Ordenamiento justo después de búsqueda
+        # Tags de categorías justo después de búsqueda
+        self._create_category_tags_section(scroll_layout)
+
+        # Ordenamiento justo después de tags
         self._create_ordering_section(scroll_layout)
 
         # Luego los demás filtros
@@ -406,6 +409,120 @@ class CategoryFilterWindow(QWidget):
 
         group.setLayout(layout)
         parent_layout.addWidget(group)
+
+    def _create_category_tags_section(self, parent_layout):
+        """Crear sección de filtro por tags de categorías"""
+        group = QGroupBox("Tags de Categorías")
+        group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(8)
+
+        # Etiqueta explicativa
+        info_label = QLabel("Filtrar por tags:")
+        info_label.setStyleSheet("font-weight: normal; color: #7f8c8d;")
+        layout.addWidget(info_label)
+
+        # Contenedor para los checkboxes de tags (con scroll si hay muchos)
+        tags_scroll = QScrollArea()
+        tags_scroll.setWidgetResizable(True)
+        tags_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        tags_scroll.setMaximumHeight(150)  # Máximo 150px de altura
+        tags_scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+        """)
+
+        tags_widget = QWidget()
+        tags_layout = QVBoxLayout(tags_widget)
+        tags_layout.setContentsMargins(0, 0, 0, 0)
+        tags_layout.setSpacing(5)
+
+        # Almacenar checkboxes de tags
+        self.tag_checkboxes = {}
+
+        # Cargar tags disponibles desde la BD
+        self._load_category_tags(tags_layout)
+
+        tags_scroll.setWidget(tags_widget)
+        layout.addWidget(tags_scroll)
+
+        # Modo de filtrado: AND u OR
+        mode_label = QLabel("Modo de combinación:")
+        mode_label.setStyleSheet("font-weight: normal; margin-top: 5px;")
+        layout.addWidget(mode_label)
+
+        self.tags_filter_mode_combo = QComboBox()
+        self.tags_filter_mode_combo.addItem("Cualquiera (OR)", "OR")
+        self.tags_filter_mode_combo.addItem("Todos (AND)", "AND")
+        self.tags_filter_mode_combo.setToolTip(
+            "OR: Categorías que tengan AL MENOS UNO de los tags seleccionados\n"
+            "AND: Categorías que tengan TODOS los tags seleccionados"
+        )
+        layout.addWidget(self.tags_filter_mode_combo)
+
+        # Conectar a debouncing
+        self.tags_filter_mode_combo.currentIndexChanged.connect(self._schedule_apply_filters)
+
+        group.setLayout(layout)
+        parent_layout.addWidget(group)
+
+    def _load_category_tags(self, tags_layout):
+        """
+        Cargar tags de categorías disponibles desde la BD
+
+        Args:
+            tags_layout: Layout donde agregar los checkboxes
+        """
+        try:
+            # Importar db_manager para obtener los tags
+            from src.database.db_manager import DBManager
+
+            db = DBManager()
+            tags_data = db.get_all_category_tags()
+            db.close()
+
+            if not tags_data:
+                # No hay tags, mostrar mensaje
+                no_tags_label = QLabel("No hay tags disponibles")
+                no_tags_label.setStyleSheet("color: #95a5a6; font-style: italic;")
+                tags_layout.addWidget(no_tags_label)
+                return
+
+            # Crear checkbox por cada tag
+            for tag_dict in tags_data:
+                tag_id = tag_dict['id']
+                tag_name = tag_dict['name']
+
+                checkbox = QCheckBox(tag_name)
+                checkbox.setStyleSheet("font-weight: normal;")
+                checkbox.toggled.connect(self._schedule_apply_filters)
+
+                self.tag_checkboxes[tag_id] = checkbox
+                tags_layout.addWidget(checkbox)
+
+            logger.debug(f"Loaded {len(tags_data)} category tags for filter")
+
+        except Exception as e:
+            logger.error(f"Error loading category tags: {e}")
+            error_label = QLabel("Error cargando tags")
+            error_label.setStyleSheet("color: #e74c3c; font-style: italic;")
+            tags_layout.addWidget(error_label)
 
     def _create_ordering_section(self, parent_layout):
         """Crear sección de ordenamiento avanzado"""
@@ -795,6 +912,17 @@ class CategoryFilterWindow(QWidget):
         if self.search_input.text().strip():
             filters['search_text'] = self.search_input.text().strip()
 
+        # Tags de categorías
+        selected_tag_ids = []
+        for tag_id, checkbox in self.tag_checkboxes.items():
+            if checkbox.isChecked():
+                selected_tag_ids.append(tag_id)
+
+        if selected_tag_ids:
+            filters['category_tag_ids'] = selected_tag_ids
+            # Modo de combinación: OR o AND
+            filters['category_tags_mode'] = self.tags_filter_mode_combo.currentData()
+
         # Ordenamiento
         order_by = self.order_by_combo.currentData()
         if order_by:  # Si hay valor seleccionado
@@ -847,6 +975,13 @@ class CategoryFilterWindow(QWidget):
 
         # Limpiar búsqueda
         self.search_input.clear()
+
+        # Desmarcar tags de categorías
+        for checkbox in self.tag_checkboxes.values():
+            checkbox.setChecked(False)
+
+        # Resetear modo de tags
+        self.tags_filter_mode_combo.setCurrentIndex(0)
 
         # Resetear ordenamiento
         self.order_by_combo.setCurrentIndex(0)

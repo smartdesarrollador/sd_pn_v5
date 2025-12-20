@@ -88,6 +88,8 @@ class CategoryFilterEngine:
             'item_count_max': 50,
             'total_uses_min': 100,
             'created_after': '2025-01-01',
+            'category_tag_ids': [1, 2, 3],  # IDs de tags de categorías
+            'category_tags_mode': 'OR',  # 'OR' o 'AND'
             'order_by': 'total_uses',
             'order_direction': 'DESC'
         }
@@ -326,6 +328,39 @@ class CategoryFilterEngine:
         if 'search_text' in filters and filters['search_text']:
             where_conditions.append("name LIKE ?")
             params.append(f"%{filters['search_text']}%")
+
+        # === FILTRO POR TAGS DE CATEGORÍAS ===
+
+        if 'category_tag_ids' in filters and filters['category_tag_ids']:
+            tag_ids = filters['category_tag_ids']
+            tags_mode = filters.get('category_tags_mode', 'OR')
+
+            if tags_mode == 'OR':
+                # OR: Categorías que tengan AL MENOS UNO de los tags seleccionados
+                placeholders = ','.join(['?' for _ in tag_ids])
+                where_conditions.append(f"""
+                    id IN (
+                        SELECT category_id
+                        FROM category_tags_category
+                        WHERE tag_id IN ({placeholders})
+                    )
+                """)
+                params.extend(tag_ids)
+
+            elif tags_mode == 'AND':
+                # AND: Categorías que tengan TODOS los tags seleccionados
+                placeholders = ','.join(['?' for _ in tag_ids])
+                where_conditions.append(f"""
+                    id IN (
+                        SELECT category_id
+                        FROM category_tags_category
+                        WHERE tag_id IN ({placeholders})
+                        GROUP BY category_id
+                        HAVING COUNT(DISTINCT tag_id) = ?
+                    )
+                """)
+                params.extend(tag_ids)
+                params.append(len(tag_ids))
 
         # === CONSTRUIR WHERE CLAUSE ===
 
