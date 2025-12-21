@@ -830,7 +830,7 @@ class FloatingPanel(QWidget, TaskbarMinimizableMixin):
             )
 
             # Connect signals to refresh panel after edit
-            dialog.item_updated.connect(lambda item_id, cat_id: self.refresh_category())
+            dialog.item_updated.connect(lambda item_id, cat_id: self.reload_current_category())
 
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 logger.info(f"Item '{item.label}' edited successfully")

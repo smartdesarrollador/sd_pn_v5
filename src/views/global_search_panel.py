@@ -794,7 +794,7 @@ class GlobalSearchPanel(QWidget, TaskbarMinimizableMixin):
             )
 
             # Connect signals to refresh panel after edit
-            dialog.item_updated.connect(lambda item_id, cat_id: self.reload_all_items())
+            dialog.item_updated.connect(lambda item_id, cat_id: self.load_all_items())
 
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 logger.info(f"Item '{item.label}' edited successfully from GlobalSearchPanel")

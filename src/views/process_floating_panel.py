@@ -732,7 +732,7 @@ class ProcessFloatingPanel(QWidget, TaskbarMinimizableMixin):
             )
 
             # Connect signals to refresh panel after edit
-            dialog.item_updated.connect(lambda item_id, cat_id: self.reload_process())
+            dialog.item_updated.connect(lambda item_id, cat_id: self.load_process(self.current_process) if self.current_process else None)
 
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 logger.info(f"Item '{item.label}' edited successfully from ProcessFloatingPanel")
