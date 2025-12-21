@@ -214,7 +214,7 @@ class CodeItemWidget(BaseItemWidget):
         if label and label != 'Sin título':
             title_label = QLabel(f"$ {label}")
             title_label.setWordWrap(True)
-            title_label.setMaximumWidth(720)
+            title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             title_label.setStyleSheet("""
                 color: #7CFC00;
                 font-size: 13px;
@@ -233,7 +233,6 @@ class CodeItemWidget(BaseItemWidget):
             self.content_label = QLabel()
             self.content_label.setObjectName("code_content")
             self.content_label.setWordWrap(True)  # IMPORTANTE: ajustar al ancho
-            self.content_label.setMaximumWidth(720)  # Limitar ancho para evitar overflow
             self.content_label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
             )

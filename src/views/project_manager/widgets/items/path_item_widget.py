@@ -235,7 +235,6 @@ class PathItemWidget(BaseItemWidget):
             self.content_label = QLabel()
             self.content_label.setObjectName("path_text")
             self.content_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            self.content_label.setMaximumWidth(720)  # Limitar ancho para evitar overflow
             self.content_label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
             )

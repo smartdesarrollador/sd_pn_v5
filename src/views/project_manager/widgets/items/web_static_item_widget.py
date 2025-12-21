@@ -166,7 +166,7 @@ class WebStaticItemWidget(BaseItemWidget):
                 white-space: pre-wrap;
             """)
             preview_label.setWordWrap(True)
-            preview_label.setMaximumWidth(720)
+            preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             preview_label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
             )

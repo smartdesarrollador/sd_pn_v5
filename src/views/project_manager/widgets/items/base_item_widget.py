@@ -55,8 +55,14 @@ class BaseItemWidget(QFrame):
 
     def init_base_ui(self):
         """Inicializar UI base común a todos los items"""
-        # Establecer ancho fijo para el contenedor del item
-        self.setFixedWidth(800)  # ANCHO FIJO: 800px
+        # Hacer el contenedor responsivo (sin ancho fijo)
+        # Establecer ancho mínimo pero permitir expansión
+        self.setMinimumWidth(400)
+        self.setMaximumWidth(16777215)  # Sin límite máximo (QWIDGETSIZE_MAX)
+
+        # Política de tamaño: expandir horizontalmente, tamaño fijo verticalmente
+        from PyQt6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         # Layout principal (horizontal)
         self.main_layout = QHBoxLayout(self)

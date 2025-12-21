@@ -48,7 +48,7 @@ class TextItemWidget(BaseItemWidget):
         if label and label != 'Sin título':
             title_label = QLabel(f"• {label}")
             title_label.setWordWrap(True)
-            title_label.setMaximumWidth(720)
+            title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             title_label.setStyleSheet("""
                 color: #FFFFFF;
                 font-size: 14px;
@@ -67,7 +67,6 @@ class TextItemWidget(BaseItemWidget):
             self.content_label = QLabel()
             self.content_label.setObjectName("text_content")
             self.content_label.setWordWrap(True)  # IMPORTANTE: ajustar al ancho
-            self.content_label.setMaximumWidth(720)  # Limitar ancho para evitar overflow
             self.content_label.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse
             )
