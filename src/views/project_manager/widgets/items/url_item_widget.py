@@ -9,11 +9,15 @@ Versión: 2.0
 """
 
 from PyQt6.QtWidgets import QLabel, QHBoxLayout, QPushButton, QSizePolicy
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QCursor
 from .base_item_widget import BaseItemWidget
 from ...styles.full_view_styles import FullViewStyles
+from ..common.copy_button import CopyButton
 import webbrowser
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class URLItemWidget(BaseItemWidget):
@@ -44,6 +48,140 @@ class URLItemWidget(BaseItemWidget):
         self.toggle_button = None
         super().__init__(item_data, parent)
         self.apply_styles()
+
+    def _create_action_buttons(self):
+        """
+        Crear botones de acción específicos para items de URL
+
+        Botones:
+        - Copiar (siempre presente)
+        - Navegador embebido (🌐)
+        - Navegador predeterminado (🔗)
+        """
+        # Botón de copiar
+        self.copy_button = CopyButton()
+        self.copy_button.copy_clicked.connect(self.copy_to_clipboard)
+        self.copy_button.setFixedSize(28, 28)
+        self.copy_button.setToolTip("Copiar URL")
+        self.buttons_layout.addWidget(self.copy_button)
+
+        # Botón navegador embebido
+        self.open_url_button = QPushButton("🌐")
+        self.open_url_button.setFixedSize(28, 28)
+        self.open_url_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.open_url_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007acc;
+                color: #ffffff;
+                border: none;
+                border-radius: 3px;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #005a9e;
+            }
+            QPushButton:pressed {
+                background-color: #004578;
+            }
+        """)
+        self.open_url_button.setToolTip("Abrir en navegador embebido")
+        self.open_url_button.clicked.connect(self._open_in_embedded_browser)
+        self.buttons_layout.addWidget(self.open_url_button)
+
+        # Botón navegador predeterminado
+        self.open_external_button = QPushButton("🔗")
+        self.open_external_button.setFixedSize(28, 28)
+        self.open_external_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.open_external_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: #ffffff;
+                border: none;
+                border-radius: 3px;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #106ebe;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+        """)
+        self.open_external_button.setToolTip("Abrir en navegador predeterminado del sistema")
+        self.open_external_button.clicked.connect(self._open_in_system_browser)
+        self.buttons_layout.addWidget(self.open_external_button)
+
+    def _open_in_embedded_browser(self):
+        """Abrir URL en navegador embebido"""
+        url = self.item_data.get('content', '')
+        if not url:
+            return
+
+        try:
+            # Asegurar que la URL tiene protocolo
+            if not url.startswith(('http://', 'https://')):
+                if url.startswith('www.'):
+                    url = 'https://' + url
+                else:
+                    url = 'https://' + url
+
+            # Emitir señal para que el panel principal abra el navegador embebido
+            # TODO: Implementar señal y conexión con navegador embebido
+            logger.info(f"Embedded browser requested for URL: {url}")
+
+            # Visual feedback
+            original_style = self.open_url_button.styleSheet()
+            self.open_url_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #00ff00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+            """)
+            QTimer.singleShot(300, lambda: self.open_url_button.setStyleSheet(original_style))
+
+        except Exception as e:
+            logger.error(f"Error opening URL in embedded browser: {e}")
+
+    def _open_in_system_browser(self):
+        """Abrir URL en navegador predeterminado del sistema"""
+        url = self.item_data.get('content', '')
+        if not url:
+            return
+
+        try:
+            # Asegurar que la URL tiene protocolo
+            if not url.startswith(('http://', 'https://')):
+                if url.startswith('www.'):
+                    url = 'https://' + url
+                else:
+                    url = 'https://' + url
+
+            # Abrir en navegador del sistema
+            webbrowser.open(url)
+            logger.info(f"URL opened in system browser: {url}")
+
+            # Visual feedback
+            original_style = self.open_external_button.styleSheet()
+            self.open_external_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #00ff00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+            """)
+            QTimer.singleShot(300, lambda: self.open_external_button.setStyleSheet(original_style))
+
+        except Exception as e:
+            logger.error(f"Error opening URL in system browser: {e}")
 
     def render_content(self):
         """Renderizar contenido de URL sin límites ni scroll"""

@@ -10,7 +10,7 @@ Versión: 1.0
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 from PyQt6.QtCore import Qt
 from .headers.group_header import GroupHeaderWidget
-from .items import TextItemWidget, CodeItemWidget, URLItemWidget, PathItemWidget
+from .items import TextItemWidget, CodeItemWidget, URLItemWidget, PathItemWidget, WebStaticItemWidget
 
 
 class ItemGroupWidget(QWidget):
@@ -75,6 +75,8 @@ class ItemGroupWidget(QWidget):
             item_widget = URLItemWidget(item_data)
         elif item_type == 'PATH':
             item_widget = PathItemWidget(item_data)
+        elif item_type == 'WEB_STATIC':
+            item_widget = WebStaticItemWidget(item_data)
         else:  # TEXT o por defecto
             item_widget = TextItemWidget(item_data)
 

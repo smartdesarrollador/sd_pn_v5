@@ -8,12 +8,16 @@ Autor: Widget Sidebar Team
 Versión: 1.0
 """
 
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QMenu
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QCursor
 from abc import abstractmethod
 from ..common.copy_button import CopyButton
 import pyperclip
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BaseItemWidget(QFrame):
@@ -64,15 +68,18 @@ class BaseItemWidget(QFrame):
         self.content_layout.setSpacing(6)
         self.main_layout.addLayout(self.content_layout, 1)  # stretch=1 para ocupar espacio disponible
 
-        # Botón de copiar (derecha, sin stretch)
-        self.copy_button = CopyButton()
-        self.copy_button.copy_clicked.connect(self.copy_to_clipboard)
-        self.copy_button.setFixedSize(32, 32)  # Tamaño fijo para el botón
-        self.main_layout.addWidget(
-            self.copy_button,
-            0,  # stretch=0 para mantener tamaño fijo
-            alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
-        )
+        # Contenedor de botones de acción (derecha)
+        self.buttons_layout = QHBoxLayout()
+        self.buttons_layout.setSpacing(4)
+        self.buttons_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Crear botones de acción (llamar método que puede ser sobrescrito)
+        self._create_action_buttons()
+
+        # Agregar botones comunes (editar, info, más)
+        self._create_common_buttons()
+
+        self.main_layout.addLayout(self.buttons_layout, 0)
 
         # Cursor
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -130,18 +137,18 @@ class BaseItemWidget(QFrame):
         """
         Obtener contenido del item
 
-        Si el item es sensible (is_sensitive=True), retorna
-        el contenido enmascarado para proteger la información.
+        Si el item es sensible (is_sensitive=True) y NO está revelado,
+        retorna el contenido enmascarado para proteger la información.
 
         Returns:
             Contenido del item o string vacío si no existe.
-            Si es sensible, retorna contenido enmascarado.
+            Si es sensible y no revelado, retorna contenido enmascarado.
         """
         content = self.item_data.get('content', '')
         is_sensitive = self.item_data.get('is_sensitive', False)
 
-        # Si el item es sensible, enmascarar el contenido
-        if is_sensitive and content:
+        # Si el item es sensible Y no está revelado, enmascarar el contenido
+        if is_sensitive and content and not getattr(self, '_is_revealed', False):
             # Calcular longitud aproximada para el enmascaramiento
             # Usar puntos circulares (bullets) para enmascarar
             mask_length = min(len(content), 20)  # Máximo 20 bullets
@@ -304,3 +311,236 @@ class BaseItemWidget(QFrame):
             label.setTextFormat(Qt.TextFormat.PlainText)
             label.setText(original_text)
             label.setProperty("original_text", None)
+
+    def _create_action_buttons(self):
+        """
+        Crear botones de acción específicos del tipo de item
+
+        Este método puede ser sobrescrito por las subclases para
+        agregar botones específicos según el tipo de item.
+
+        Por defecto, solo agrega el botón de copiar.
+        """
+        # Botón de copiar (siempre presente)
+        self.copy_button = CopyButton()
+        self.copy_button.copy_clicked.connect(self.copy_to_clipboard)
+        self.copy_button.setFixedSize(28, 28)
+        self.copy_button.setToolTip("Copiar contenido")
+        self.buttons_layout.addWidget(self.copy_button)
+
+    def _create_common_buttons(self):
+        """
+        Crear botones comunes a todos los tipos de items
+
+        Botones:
+        - Revelar/Ocultar (solo para items sensibles)
+        - Editar
+        - Detalles (info)
+        - Más opciones (menú dropdown)
+        """
+        # Botón revelar/ocultar (solo para items sensibles)
+        if self.item_data.get('is_sensitive', False):
+            self.reveal_button = QPushButton("👁")
+            self.reveal_button.setFixedSize(28, 28)
+            self.reveal_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.reveal_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #cc0000;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #9e0000;
+                }
+                QPushButton:pressed {
+                    background-color: #780000;
+                }
+            """)
+            self.reveal_button.setToolTip("Revelar/Ocultar contenido sensible")
+            self.reveal_button.clicked.connect(self._toggle_reveal)
+            self.buttons_layout.addWidget(self.reveal_button)
+            self._is_revealed = False
+
+        # Botón editar
+        self.edit_btn = QPushButton("✏️")
+        self.edit_btn.setFixedSize(28, 28)
+        self.edit_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #3e3e42;
+                border-radius: 3px;
+            }
+        """)
+        self.edit_btn.setToolTip("Editar item")
+        self.edit_btn.clicked.connect(self._edit_item)
+        self.buttons_layout.addWidget(self.edit_btn)
+
+        # Botón detalles (info)
+        self.info_btn = QPushButton("ℹ️")
+        self.info_btn.setFixedSize(28, 28)
+        self.info_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.info_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #3e3e42;
+                border-radius: 3px;
+            }
+        """)
+        self.info_btn.setToolTip("Ver detalles del item")
+        self.info_btn.clicked.connect(self._show_details)
+        self.buttons_layout.addWidget(self.info_btn)
+
+    def _toggle_reveal(self):
+        """Revelar/ocultar contenido sensible"""
+        if not hasattr(self, '_is_revealed'):
+            self._is_revealed = False
+
+        # Si no está revelado, verificar contraseña maestra
+        if not self._is_revealed:
+            from src.views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_label = self.item_data.get('label', 'item sensible')
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para revelar:\n'{item_label}'",
+                parent=self.window()
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for revealing item: {item_label}")
+                return
+
+        # Alternar estado
+        self._is_revealed = not self._is_revealed
+
+        # Actualizar icono del botón
+        if self._is_revealed:
+            self.reveal_button.setText("🙈")
+            self.reveal_button.setToolTip("Ocultar contenido sensible")
+        else:
+            self.reveal_button.setText("👁")
+            self.reveal_button.setToolTip("Revelar contenido sensible")
+
+        # Renderizar de nuevo el contenido (las subclases deben manejar esto)
+        self._update_content_visibility()
+
+    def _update_content_visibility(self):
+        """
+        Actualizar visibilidad del contenido sensible
+
+        Re-renderiza el contenido del item para mostrar/ocultar
+        información sensible según el estado de revelado.
+        """
+        # Limpiar el layout de contenido
+        while self.content_layout.count():
+            child = self.content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                # Si es un layout, eliminar sus widgets también
+                while child.layout().count():
+                    subchild = child.layout().takeAt(0)
+                    if subchild.widget():
+                        subchild.widget().deleteLater()
+
+        # Volver a renderizar el contenido
+        self.render_content()
+
+    def _edit_item(self):
+        """Editar el item"""
+        # Si el item es sensible, verificar contraseña maestra
+        if self.item_data.get('is_sensitive', False):
+            from src.views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_label = self.item_data.get('label', 'item sensible')
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para editar:\n'{item_label}'",
+                parent=self.window()
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for editing item: {item_label}")
+                return
+
+        # Abrir diálogo de edición
+        from src.views.item_editor_dialog import ItemEditorDialog
+        from src.models.item import Item
+
+        try:
+            # Convertir dict a objeto Item
+            item = Item.from_dict(self.item_data)
+
+            # Crear diálogo de edición
+            dialog = ItemEditorDialog(item=item, parent=self.window())
+            result = dialog.exec()
+
+            if result:
+                logger.info(f"Item edited: {item.label}")
+                # Recargar la vista del área
+                self._reload_area_view()
+
+        except Exception as e:
+            logger.error(f"Error editing item: {e}")
+
+    def _show_details(self):
+        """Mostrar detalles del item"""
+        # Si el item es sensible, verificar contraseña maestra
+        if self.item_data.get('is_sensitive', False):
+            from src.views.dialogs.master_password_dialog import MasterPasswordDialog
+
+            item_label = self.item_data.get('label', 'item sensible')
+            verified = MasterPasswordDialog.verify(
+                title="Item Sensible",
+                message=f"Ingresa tu contraseña maestra para ver detalles de:\n'{item_label}'",
+                parent=self.window()
+            )
+
+            if not verified:
+                logger.info(f"Master password verification cancelled for viewing details: {item_label}")
+                return
+
+        # Abrir diálogo de detalles
+        from src.views.dialogs.item_details_dialog import ItemDetailsDialog
+        from src.models.item import Item
+
+        try:
+            # Convertir dict a objeto Item
+            item = Item.from_dict(self.item_data)
+
+            # Crear diálogo de detalles
+            dialog = ItemDetailsDialog(item, parent=self.window())
+            dialog.exec()
+
+        except Exception as e:
+            logger.error(f"Error showing item details: {e}")
+
+    def _reload_area_view(self):
+        """
+        Recargar la vista del área completa
+
+        Busca el AreaFullViewPanel padre y recarga la vista.
+        """
+        from src.views.area_manager.area_full_view_panel import AreaFullViewPanel
+
+        # Buscar el panel padre
+        parent_widget = self.parent()
+        while parent_widget:
+            if isinstance(parent_widget, AreaFullViewPanel):
+                parent_widget.refresh_view()
+                break
+            parent_widget = parent_widget.parent()

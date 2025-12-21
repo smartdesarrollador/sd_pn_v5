@@ -404,6 +404,30 @@ class FullViewStyles:
         """
 
     @staticmethod
+    def get_web_static_item_style():
+        """Estilos para WebStaticItemWidget"""
+        return f"""
+            WebStaticItemWidget {{
+                background-color: {Colors.BG_ITEM_CODE};
+                border: 1px solid #4CAF50;
+                border-radius: 6px;
+                padding: 12px;
+                margin: 8px 15px 8px 60px;
+            }}
+
+            WebStaticItemWidget:hover {{
+                background-color: {Colors.BG_HOVER};
+                border-color: #66BB6A;
+            }}
+
+            QLabel#web_content {{
+                color: #90EE90;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 12px;
+            }}
+        """
+
+    @staticmethod
     def get_copy_button_style():
         """Estilos para CopyButton"""
         return f"""

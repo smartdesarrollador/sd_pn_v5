@@ -9,12 +9,17 @@ Versión: 2.0
 """
 
 from PyQt6.QtWidgets import QLabel, QHBoxLayout, QPushButton, QSizePolicy
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCursor
 from .base_item_widget import BaseItemWidget
 from ...styles.full_view_styles import FullViewStyles
+from ..common.copy_button import CopyButton
 import subprocess
 import os
+import platform
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PathItemWidget(BaseItemWidget):
@@ -45,6 +50,152 @@ class PathItemWidget(BaseItemWidget):
         self.toggle_button = None
         super().__init__(item_data, parent)
         self.apply_styles()
+
+    def _create_action_buttons(self):
+        """
+        Crear botones de acción específicos para items de PATH
+
+        Botones:
+        - Copiar (siempre presente)
+        - Abrir en explorador (📁)
+        - Abrir archivo (📝) - solo para archivos
+        """
+        # Botón de copiar
+        self.copy_button = CopyButton()
+        self.copy_button.copy_clicked.connect(self.copy_to_clipboard)
+        self.copy_button.setFixedSize(28, 28)
+        self.copy_button.setToolTip("Copiar ruta")
+        self.buttons_layout.addWidget(self.copy_button)
+
+        # Botón abrir en explorador
+        self.open_explorer_button = QPushButton("📁")
+        self.open_explorer_button.setFixedSize(28, 28)
+        self.open_explorer_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.open_explorer_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2d7d2d;
+                color: #ffffff;
+                border: none;
+                border-radius: 3px;
+                font-size: 12pt;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #236123;
+            }
+            QPushButton:pressed {
+                background-color: #1a4a1a;
+            }
+        """)
+        self.open_explorer_button.setToolTip("Abrir en explorador")
+        self.open_explorer_button.clicked.connect(self._open_in_explorer)
+        self.buttons_layout.addWidget(self.open_explorer_button)
+
+        # Botón abrir archivo (solo si es archivo)
+        path_content = self.item_data.get('content', '')
+        if path_content and os.path.exists(path_content) and os.path.isfile(path_content):
+            self.open_file_button = QPushButton("📝")
+            self.open_file_button.setFixedSize(28, 28)
+            self.open_file_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            self.open_file_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #cc7a00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #9e5e00;
+                }
+                QPushButton:pressed {
+                    background-color: #784500;
+                }
+            """)
+            self.open_file_button.setToolTip("Abrir archivo")
+            self.open_file_button.clicked.connect(self._open_file)
+            self.buttons_layout.addWidget(self.open_file_button)
+
+    def _open_in_explorer(self):
+        """Abrir en explorador de archivos"""
+        path_content = self.item_data.get('content', '')
+        if not path_content:
+            return
+
+        try:
+            system = platform.system()
+
+            if system == 'Windows':
+                if os.path.exists(path_content):
+                    subprocess.run(['explorer', '/select,', os.path.abspath(path_content)])
+                else:
+                    parent = os.path.dirname(path_content)
+                    if os.path.exists(parent):
+                        subprocess.run(['explorer', os.path.abspath(parent)])
+            elif system == 'Darwin':  # macOS
+                if os.path.exists(path_content):
+                    subprocess.run(['open', '-R', os.path.abspath(path_content)])
+            else:  # Linux
+                if os.path.exists(path_content):
+                    if os.path.isfile(path_content):
+                        subprocess.run(['xdg-open', os.path.dirname(os.path.abspath(path_content))])
+                    else:
+                        subprocess.run(['xdg-open', os.path.abspath(path_content)])
+
+            logger.info(f"Opened path in explorer: {path_content}")
+
+            # Visual feedback
+            original_style = self.open_explorer_button.styleSheet()
+            self.open_explorer_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #00ff00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+            """)
+            QTimer.singleShot(300, lambda: self.open_explorer_button.setStyleSheet(original_style))
+
+        except Exception as e:
+            logger.error(f"Error opening path in explorer: {e}")
+
+    def _open_file(self):
+        """Abrir archivo con aplicación predeterminada"""
+        path_content = self.item_data.get('content', '')
+        if not path_content or not os.path.exists(path_content) or not os.path.isfile(path_content):
+            return
+
+        try:
+            system = platform.system()
+
+            if system == 'Windows':
+                os.startfile(os.path.abspath(path_content))
+            elif system == 'Darwin':  # macOS
+                subprocess.run(['open', os.path.abspath(path_content)])
+            else:  # Linux
+                subprocess.run(['xdg-open', os.path.abspath(path_content)])
+
+            logger.info(f"Opened file: {path_content}")
+
+            # Visual feedback
+            original_style = self.open_file_button.styleSheet()
+            self.open_file_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #00ff00;
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 3px;
+                    font-size: 12pt;
+                    padding: 0px;
+                }
+            """)
+            QTimer.singleShot(300, lambda: self.open_file_button.setStyleSheet(original_style))
+
+        except Exception as e:
+            logger.error(f"Error opening file: {e}")
 
     def render_content(self):
         """Renderizar contenido de PATH sin límites ni scroll"""
