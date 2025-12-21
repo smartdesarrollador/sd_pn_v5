@@ -40,15 +40,15 @@ COLORS = {
 }
 
 DIMENSIONS = {
-    'sidebar_width': 70,
+    'sidebar_width': 58,  # Reducido de 70 a 58px (más compacto)
     'sidebar_height_percent': 0.8,
     'margin_top_percent': 0.1,
     'header_height': 50,
     'footer_height': 60,
     'separator_height': 3,
-    'button_size': 60,
+    'button_size': 48,  # Reducido de 60 a 48px
     'button_margin': 5,
-    'icon_size': 28,
+    'icon_size': 20,  # Reducido de 28 a 20pt
     'badge_size': 18,
     'border_width': 3,
     'border_radius': 10,
