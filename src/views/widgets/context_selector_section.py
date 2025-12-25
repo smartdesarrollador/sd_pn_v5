@@ -4,14 +4,14 @@ Widget de selección de contexto para el Creador Masivo
 Componentes:
 - Selector de Proyecto con botón +
 - Selector de Área con botón +
-- Checkbox "Crear como lista" con campo de nombre
 
 NOTA: El selector de Categoría fue movido a CategorySelectorSection
+NOTA: El campo de nombre de lista fue movido a ListNameSection
 """
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QPushButton, QCheckBox, QLineEdit, QFrame
+    QPushButton, QLineEdit, QFrame
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
@@ -217,13 +217,12 @@ class ContextSelectorSection(QWidget):
     """
     Sección de selección de contexto para el Creador Masivo
 
-    Incluye selectores de proyecto, área y checkbox de lista.
+    Incluye selectores de proyecto y área.
+    NOTA: Siempre se crea como lista (sin checkbox).
 
     Señales:
         project_changed: Emitida cuando cambia el proyecto (int or None)
         area_changed: Emitida cuando cambia el área (int or None)
-        create_as_list_changed: Emitida cuando cambia el checkbox (bool)
-        list_name_changed: Emitida cuando cambia el nombre de lista (str)
         create_project_clicked: Emitida cuando se hace clic en crear proyecto
         create_area_clicked: Emitida cuando se hace clic en crear área
     """
@@ -231,8 +230,6 @@ class ContextSelectorSection(QWidget):
     # Señales
     project_changed = pyqtSignal(object)  # int or None
     area_changed = pyqtSignal(object)  # int or None
-    create_as_list_changed = pyqtSignal(bool)
-    list_name_changed = pyqtSignal(str)
     create_project_clicked = pyqtSignal()
     create_area_clicked = pyqtSignal()
 
@@ -274,53 +271,6 @@ class ContextSelectorSection(QWidget):
         )
         layout.addWidget(self.area_selector)
 
-        # Checkbox "Crear como lista"
-        self.list_checkbox = QCheckBox("Crear como lista")
-        self.list_checkbox.setStyleSheet("""
-            QCheckBox {
-                color: #ffffff;
-                font-size: 13px;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 2px solid #444;
-                border-radius: 3px;
-                background-color: #2d2d2d;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #2196F3;
-                border-color: #2196F3;
-                image: none;
-            }
-            QCheckBox::indicator:checked:after {
-                content: "✓";
-                color: white;
-            }
-        """)
-        layout.addWidget(self.list_checkbox)
-
-        # Campo de nombre de lista (inicialmente oculto)
-        list_name_layout = QHBoxLayout()
-        list_name_layout.setContentsMargins(0, 0, 0, 0)
-        list_name_layout.setSpacing(10)
-
-        list_name_label = QLabel("Nombre:")
-        list_name_label.setFixedWidth(80)
-        list_name_layout.addWidget(list_name_label)
-
-        self.list_name_input = QLineEdit()
-        self.list_name_input.setPlaceholderText("Nombre de la lista...")
-        self.list_name_input.setMinimumHeight(35)
-        self.list_name_input.setVisible(False)
-        list_name_label.setVisible(False)
-        list_name_layout.addWidget(self.list_name_input)
-
-        self.list_name_label = list_name_label  # Guardar referencia
-
-        layout.addLayout(list_name_layout)
-
     def _apply_styles(self):
         """Aplica estilos CSS al widget"""
         self.setStyleSheet("""
@@ -355,23 +305,6 @@ class ContextSelectorSection(QWidget):
         self.project_selector.create_clicked.connect(self.create_project_clicked.emit)
         self.area_selector.create_clicked.connect(self.create_area_clicked.emit)
 
-        # Lista
-        self.list_checkbox.stateChanged.connect(self._on_list_checkbox_changed)
-        self.list_name_input.textChanged.connect(self.list_name_changed.emit)
-
-    def _on_list_checkbox_changed(self, state: int):
-        """Callback cuando cambia el checkbox de lista"""
-        is_checked = state == Qt.CheckState.Checked.value
-
-        # Mostrar/ocultar campo de nombre
-        self.list_name_input.setVisible(is_checked)
-        self.list_name_label.setVisible(is_checked)
-
-        # Emitir señal
-        self.create_as_list_changed.emit(is_checked)
-
-        logger.debug(f"Crear como lista: {is_checked}")
-
     def load_projects(self, projects: list[tuple[int, str]]):
         """
         Carga proyectos en el selector
@@ -399,12 +332,8 @@ class ContextSelectorSection(QWidget):
         return self.area_selector.get_selected_id()
 
     def get_create_as_list(self) -> bool:
-        """Obtiene el estado del checkbox de lista"""
-        return self.list_checkbox.isChecked()
-
-    def get_list_name(self) -> str:
-        """Obtiene el nombre de la lista"""
-        return self.list_name_input.text().strip()
+        """Obtiene el estado de crear como lista (siempre True ahora)"""
+        return True
 
     def has_project_or_area(self) -> bool:
         """
@@ -424,15 +353,12 @@ class ContextSelectorSection(QWidget):
         self.area_selector.set_selected_id(area_id)
 
     def set_create_as_list(self, checked: bool):
-        """Establece el estado del checkbox de lista"""
-        self.list_checkbox.setChecked(checked)
-        # Actualizar visibilidad directamente (por si no se procesa la señal)
-        self.list_name_input.setVisible(checked)
-        self.list_name_label.setVisible(checked)
-
-    def set_list_name(self, name: str):
-        """Establece el nombre de la lista"""
-        self.list_name_input.setText(name)
+        """
+        Establece el estado de crear como lista (deprecated - siempre es True)
+        Se mantiene por compatibilidad con código existente
+        """
+        # No hace nada ya que siempre es True
+        pass
 
     def to_dict(self) -> dict:
         """
@@ -444,8 +370,7 @@ class ContextSelectorSection(QWidget):
         return {
             'project_id': self.get_project_id(),
             'area_id': self.get_area_id(),
-            'create_as_list': self.get_create_as_list(),
-            'list_name': self.get_list_name()
+            'create_as_list': self.get_create_as_list()
         }
 
     def from_dict(self, data: dict):
@@ -458,7 +383,6 @@ class ContextSelectorSection(QWidget):
         self.set_project_id(data.get('project_id'))
         self.set_area_id(data.get('area_id'))
         self.set_create_as_list(data.get('create_as_list', False))
-        self.set_list_name(data.get('list_name', ''))
 
     def validate(self) -> tuple[bool, str]:
         """
@@ -467,22 +391,16 @@ class ContextSelectorSection(QWidget):
         Returns:
             Tupla (is_valid, error_message)
         """
-        # Si está marcado crear como lista, necesita nombre
-        if self.get_create_as_list():
-            if not self.get_list_name():
-                return False, "Debe ingresar un nombre para la lista"
-
+        # No hay validación específica aquí
+        # (el nombre de lista se valida en ListNameSection)
         return True, ""
 
     def clear(self):
         """Limpia todos los campos"""
         self.project_selector.clear()
         self.area_selector.clear()
-        self.list_checkbox.setChecked(False)
-        self.list_name_input.clear()
 
     def __repr__(self) -> str:
         """Representación del widget"""
         return (f"ContextSelectorSection(project={self.get_project_id()}, "
-                f"area={self.get_area_id()}, "
-                f"list={self.get_create_as_list()})")
+                f"area={self.get_area_id()})")

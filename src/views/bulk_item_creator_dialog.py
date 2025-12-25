@@ -767,13 +767,12 @@ class BulkItemCreatorDialog(QWidget):
         """
         # Determinar tipo de guardado
         has_project_or_area = draft.has_project_or_area()
-        is_list = draft.create_as_list
 
         # Base del mensaje
         msg = f"✅ Se guardaron {count} items correctamente"
 
-        # Si es lista
-        if is_list and draft.list_name:
+        # Si tiene proyecto/área, siempre es lista
+        if has_project_or_area and draft.list_name:
             msg += f" en la lista '{draft.list_name}'"
 
             # Agregar relación con proyecto/área
@@ -787,21 +786,6 @@ class BulkItemCreatorDialog(QWidget):
                 tags_str = ", ".join(draft.project_element_tags)
                 msg += f"\n🏷️ Tags: {tags_str}"
 
-        # Si es tag especial
-        elif has_project_or_area and draft.special_tag:
-            msg += f" con el tag '{draft.special_tag}'"
-
-            # Agregar relación con proyecto/área
-            if draft.project_id:
-                msg += f"\n📁 Relacionado con el proyecto"
-            elif draft.area_id:
-                msg += f"\n📁 Relacionado con el área"
-
-            # Agregar tags de proyecto/área
-            if draft.project_element_tags:
-                tags_str = ", ".join(draft.project_element_tags)
-                msg += f"\n🏷️ Tags del proyecto/área: {tags_str}"
-
         # Modo simple (sin proyecto/área)
         else:
             if draft.item_tags:
@@ -812,17 +796,14 @@ class BulkItemCreatorDialog(QWidget):
 
     def _save_items_from_draft(self, draft: ItemDraft) -> int:
         """
-        Guarda los items de un draft en la BD usando 3 estrategias
+        Guarda los items de un draft en la BD usando 2 estrategias
 
         Estrategias de guardado:
         1. MODO SIMPLE: Sin proyecto/área
            → Guarda items con tags opcionales
 
-        2. MODO LISTA: Con proyecto/área + checkbox "Crear como lista"
+        2. MODO LISTA: Con proyecto/área (siempre como lista)
            → Crea lista → guarda items con list_id → crea relación proyecto-lista
-
-        3. MODO TAG ESPECIAL: Con proyecto/área + tag especial (sin lista)
-           → Guarda items con tag especial → crea relación proyecto-tag
 
         Args:
             draft: Borrador con los items y metadatos
@@ -835,14 +816,12 @@ class BulkItemCreatorDialog(QWidget):
         """
         # Determinar estrategia de guardado
         has_project_or_area = draft.has_project_or_area()
-        is_list = draft.create_as_list
 
         logger.info("=" * 60)
         logger.info("GUARDANDO ITEMS DESDE DRAFT")
         logger.info(f"  Proyecto: {draft.project_id}")
         logger.info(f"  Área: {draft.area_id}")
-        logger.info(f"  Es lista: {is_list}")
-        logger.info(f"  Tag especial: '{draft.special_tag}'")
+        logger.info(f"  Nombre lista: '{draft.list_name}'")
         logger.info(f"  Items: {len(draft.items)}")
         logger.info(f"  Tags proyecto: {draft.project_element_tags}")
         logger.info(f"  Tags items: {draft.item_tags}")
@@ -853,14 +832,9 @@ class BulkItemCreatorDialog(QWidget):
             logger.info("→ Estrategia: MODO SIMPLE")
             return self._save_simple_items(draft)
 
-        # ESTRATEGIA 2: Modo Lista (con proyecto/área + checkbox)
-        if is_list:
-            logger.info("→ Estrategia: MODO LISTA")
-            return self._save_as_list(draft)
-
-        # ESTRATEGIA 3: Modo Tag Especial (con proyecto/área, sin lista)
-        logger.info("→ Estrategia: MODO TAG ESPECIAL")
-        return self._save_with_special_tag(draft)
+        # ESTRATEGIA 2: Modo Lista (con proyecto/área - siempre como lista)
+        logger.info("→ Estrategia: MODO LISTA")
+        return self._save_as_list(draft)
 
     def _save_simple_items(self, draft: ItemDraft) -> int:
         """
@@ -902,153 +876,6 @@ class BulkItemCreatorDialog(QWidget):
                 logger.error(f"Error guardando item simple: {e}")
 
         logger.info(f"✓ Modo SIMPLE: {saved_count} items guardados")
-        return saved_count
-
-    def _save_with_special_tag(self, draft: ItemDraft) -> int:
-        """
-        Guarda items con tag especial vinculado a proyecto/área
-
-        Este método se usa cuando hay proyecto/área Y NO es lista.
-        Flujo:
-        1. Obtener/crear el tag especial en BD
-        2. Crear items con tag especial + tags opcionales
-        3. Crear relación proyecto-tag (project_relations)
-        4. Asociar tags de proyecto a la relación
-
-        Args:
-            draft: Borrador con items, special_tag y project_element_tags
-
-        Returns:
-            Cantidad de items guardados
-        """
-        saved_count = 0
-
-        # Determinar si es proyecto o área
-        is_project = draft.project_id is not None
-        entity_id = draft.project_id if is_project else draft.area_id
-        entity_name = "Proyecto" if is_project else "Área"
-
-        logger.info(f"Guardando items con TAG ESPECIAL: '{draft.special_tag}' → {entity_name} #{entity_id}")
-
-        try:
-            # Paso 1: Obtener/crear tag especial
-            tag_especial_id = self.db.get_or_create_tag(draft.special_tag)
-            logger.debug(f"Tag especial ID: {tag_especial_id}")
-
-            # Paso 2: Combinar tags (especial + opcionales)
-            all_tags = [draft.special_tag] + draft.item_tags
-
-            # Paso 3: Guardar cada item con todos los tags
-            for item_field in draft.items:
-                if item_field.is_empty():
-                    continue
-
-                try:
-                    item_id = self.db.add_item(
-                        category_id=draft.category_id,
-                        label=item_field.get_final_label(),
-                        content=item_field.content,
-                        item_type=item_field.item_type,
-                        is_sensitive=item_field.is_sensitive,
-                        tags=all_tags
-                    )
-
-                    if item_id:
-                        saved_count += 1
-                        logger.debug(f"Item guardado (tag especial): {item_field.content[:30]}...")
-
-                except Exception as e:
-                    logger.error(f"Error guardando item con tag especial: {e}")
-
-            # Paso 4: Crear relación proyecto/área → tag especial
-            if is_project:
-                relation_id = self.db.add_project_relation(
-                    project_id=draft.project_id,
-                    entity_type='tag',
-                    entity_id=tag_especial_id,
-                    description=f"Tag principal: {draft.special_tag}"
-                )
-                logger.debug(f"Relación proyecto creada: relation_id={relation_id}")
-            else:
-                relation_id = self.db.add_area_relation(
-                    area_id=draft.area_id,
-                    entity_type='tag',
-                    entity_id=tag_especial_id,
-                    description=f"Tag principal: {draft.special_tag}"
-                )
-                logger.debug(f"Relación área creada: relation_id={relation_id}")
-
-            # Paso 5: Asociar tags de proyecto/área a la relación
-            for project_tag_name in draft.project_element_tags:
-                # Obtener tag de proyecto (NO de tags global)
-                if is_project:
-                    project_tag = self.db.get_project_element_tag_by_name(project_tag_name)
-                    if not project_tag:
-                        # Si no existe, crearlo
-                        project_tag_id = self.db.add_project_element_tag(project_tag_name)
-                    else:
-                        project_tag_id = project_tag['id']
-
-                    self.db.add_tag_to_project_relation(relation_id, project_tag_id)
-                else:
-                    # Para áreas, usar tabla area_element_tags
-                    area_tag = self.db.get_area_element_tag_by_name(project_tag_name)
-                    if not area_tag:
-                        area_tag_id = self.db.add_area_element_tag(project_tag_name)
-                    else:
-                        area_tag_id = area_tag['id']
-
-                    self.db.assign_tag_to_area_relation(relation_id, area_tag_id)
-
-                logger.debug(f"Tag '{project_tag_name}' asociado a relación")
-
-            # Paso 6: Guardar orden en filtered_order para cada tag
-            for project_tag_name in draft.project_element_tags:
-                if is_project:
-                    project_tag = self.db.get_project_element_tag_by_name(project_tag_name)
-                    project_tag_id = project_tag['id'] if project_tag else None
-
-                    if project_tag_id:
-                        # Obtener el max order_index actual
-                        filtered_orders = self.db.get_filtered_order(draft.project_id, project_tag_id)
-                        max_order = max(filtered_orders.values()) if filtered_orders else -1
-                        next_order = max_order + 1
-
-                        # Guardar el orden
-                        self.db.update_filtered_order(
-                            draft.project_id,
-                            project_tag_id,
-                            'relation',
-                            relation_id,
-                            next_order
-                        )
-                        logger.debug(f"Orden guardado para tag '{project_tag_name}': {next_order}")
-                else:
-                    area_tag = self.db.get_area_element_tag_by_name(project_tag_name)
-                    area_tag_id = area_tag['id'] if area_tag else None
-
-                    if area_tag_id:
-                        # Obtener el max order_index actual
-                        filtered_orders = self.db.get_area_filtered_order(draft.area_id, area_tag_id)
-                        max_order = max(filtered_orders.values()) if filtered_orders else -1
-                        next_order = max_order + 1
-
-                        # Guardar el orden
-                        self.db.update_area_filtered_order(
-                            draft.area_id,
-                            area_tag_id,
-                            'relation',
-                            relation_id,
-                            next_order
-                        )
-                        logger.debug(f"Orden guardado para tag '{project_tag_name}': {next_order}")
-
-            logger.info(f"✓ Modo TAG ESPECIAL: {saved_count} items + relación {entity_name.lower()}")
-
-        except Exception as e:
-            logger.error(f"Error en guardado con tag especial: {e}")
-            raise
-
         return saved_count
 
     def _save_as_list(self, draft: ItemDraft) -> int:
