@@ -50,9 +50,18 @@ class BaseItemWidget(QFrame):
         self.item_data = item_data
         self.copy_button = None
 
+        # Variables para resize manual
+        self._is_resizing = False
+        self._resize_start_y = 0
+        self._resize_start_height = 0
+        self._custom_height = None  # Altura personalizada por el usuario
+
         self.init_base_ui()
         self.render_content()  # Método abstracto - implementado por subclases
         self._adjust_height_for_content()  # Ajustar altura según contenido
+
+        # Habilitar tracking del mouse para resize
+        self.setMouseTracking(True)
 
     def init_base_ui(self):
         """Inicializar UI base común a todos los items"""
@@ -569,7 +578,15 @@ class BaseItemWidget(QFrame):
 
         Si el contenido es muy extenso (>400 caracteres), amplía la altura
         máxima al doble (600px) para mostrar más texto sin scroll inicial.
+
+        Si el usuario ya estableció una altura personalizada (resize manual),
+        respeta esa altura.
         """
+        # Si el usuario ya personalizó la altura, no ajustar automáticamente
+        if self._custom_height is not None:
+            logger.debug(f"Respetando altura personalizada: {self._custom_height}px")
+            return
+
         # Obtener contenido del item (manejar valores None)
         content = self.item_data.get('content', '') or ''
         label = self.item_data.get('label', '') or ''
@@ -580,14 +597,80 @@ class BaseItemWidget(QFrame):
 
         # Si el contenido es muy extenso, ampliar altura al doble
         if total_length > 400:  # Reducido de 800 a 400 para mejor detección
-            self.setMaximumHeight(1000)  # Ampliar a 600px
-            logger.debug(f"Item con contenido extenso ({total_length} chars): altura ampliada a 600px")
+            self.setMaximumHeight(1000)  # Ampliar a 1000px
+            logger.debug(f"Item con contenido extenso ({total_length} chars): altura ampliada a 1000px")
         else:
             self.setMaximumHeight(300)  # Mantener altura estándar
             logger.debug(f"Item con contenido normal ({total_length} chars): altura estándar 300px")
 
         # Actualizar geometría
         self.updateGeometry()
+
+    def mouseMoveEvent(self, event):
+        """
+        Manejar movimiento del mouse para resize manual
+
+        Detecta cuando el mouse está cerca del borde inferior
+        y cambia el cursor a SizeVerCursor.
+        """
+        # Zona de resize: 10px desde el borde inferior
+        resize_margin = 10
+        mouse_y = event.pos().y()
+        widget_height = self.height()
+
+        # Si estamos en modo resize, actualizar altura
+        if self._is_resizing:
+            # Calcular nueva altura
+            delta_y = event.globalPosition().y() - self._resize_start_y
+            new_height = max(100, self._resize_start_height + int(delta_y))  # Mínimo 100px
+
+            # Aplicar nueva altura
+            self.setMaximumHeight(new_height)
+            self.setMinimumHeight(new_height)
+            self._custom_height = new_height
+
+            logger.debug(f"Resizing item: new height = {new_height}px")
+            return
+
+        # Detectar si el mouse está cerca del borde inferior
+        if widget_height - mouse_y <= resize_margin:
+            self.setCursor(Qt.CursorShape.SizeVerCursor)
+        else:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        """
+        Iniciar resize cuando se hace click en el borde inferior
+        """
+        # Zona de resize: 10px desde el borde inferior
+        resize_margin = 10
+        mouse_y = event.pos().y()
+        widget_height = self.height()
+
+        # Si el click es en la zona de resize
+        if widget_height - mouse_y <= resize_margin and event.button() == Qt.MouseButton.LeftButton:
+            self._is_resizing = True
+            self._resize_start_y = event.globalPosition().y()
+            self._resize_start_height = self.height()
+            logger.debug(f"Starting resize from height: {self._resize_start_height}px")
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """
+        Finalizar resize
+        """
+        if self._is_resizing:
+            self._is_resizing = False
+            logger.info(f"Resize completed: final height = {self.height()}px")
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
 
     def _reload_area_view(self):
         """
